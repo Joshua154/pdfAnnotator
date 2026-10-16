@@ -1,0 +1,137 @@
+# PDF Annotator
+
+Draw, highlight, and add text, shapes, and images to PDFs in Obsidian. Annotations are saved in readable Markdown notes; the original PDF is never modified.
+
+## Features
+
+- Pen, freehand highlighter, eraser, and text selection highlighting.
+- Text boxes, rectangles, ellipses, lines, and arrows.
+- Select, move, resize, and delete annotations, with undo and redo.
+- Paste images from the clipboard and configure their storage folders and filenames.
+- Zoom, fit to width or height, page snapping, and smooth keyboard scrolling.
+- Autosave to one Markdown note per PDF, with page links and annotation data.
+- Store notes and images in vault folders or relative to each PDF, using path templates.
+
+## Installation
+
+Requires Obsidian **1.7.2 or newer**.
+
+Until the plugin is published in the community directory, install it manually:
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from a published GitHub release of this repository. The source archive alone is not an installable plugin.
+2. Create `<vault>/.obsidian/plugins/pdf-annotator/` (replace `.obsidian` if your vault uses a custom configuration folder).
+3. Copy the three files into that folder.
+4. Reload Obsidian and enable **PDF Annotator** in **Settings → Community plugins**.
+
+After community directory approval, search for **PDF Annotator** in Obsidian's community plugin browser and install it there.
+
+## Usage
+
+Right-click a PDF in the file explorer and choose **Annotate PDF**, or open a PDF and run **PDF Annotator: Annotate current PDF** from the command palette. The standard PDF viewer remains available.
+
+Select a tool in the toolbar, then draw or click on a page. For text highlighting, choose **Highlight PDF text** and select text in the PDF. Text highlighting requires a PDF with selectable text; scanned documents need OCR from another tool first.
+
+Use **Select** to move or resize an annotation, or select it and press Delete. Click a text annotation twice with Select to edit it. Click outside a text box or press Ctrl/Cmd+Enter to save its text; Escape cancels editing.
+
+Paste a clipboard image with Ctrl/Cmd+V while the annotator is focused. The image is saved as a vault file and can then be moved or resized. Use **Open annotation note** in the toolbar to see the generated Markdown.
+
+### Keyboard controls
+
+Click the PDF first to focus the viewer. Shortcuts are ignored while typing in a text editor or settings field.
+
+| Key | Action |
+| --- | --- |
+| Left / Right | Snap to the previous / next page, once per press |
+| Up / Down | Scroll smoothly; hold to keep scrolling |
+| V | Select, move, resize |
+| P | Pen |
+| H | Freehand highlighter |
+| E | Eraser |
+| T | Text box |
+| S | Highlight selected PDF text |
+| R / O / L / A | Rectangle / ellipse / line / arrow |
+| Delete / Backspace | Delete the selected annotation |
+| Escape | Clear selection or cancel text editing |
+| Ctrl/Cmd+Z | Undo |
+| Ctrl/Cmd+Shift+Z | Redo |
+| Ctrl/Cmd+Y | Redo |
+
+### Annotation folders
+
+The default location is `PDF Annotations/<PDF name>.annotations.md`, relative to the vault root. Enable **Annotations relative to PDF** to resolve the folder from each PDF's containing directory.
+
+For `Courses/Math/Lecture.pdf`, with relative storage enabled:
+
+| Annotations folder | Resulting note |
+| --- | --- |
+| Empty or `.` | `Courses/Math/Lecture.annotations.md` |
+| `Notes` | `Courses/Math/Notes/Lecture.annotations.md` |
+| `../Notes` | `Courses/Notes/Lecture.annotations.md` |
+| `Notes/{filename}` | `Courses/Math/Notes/Lecture/Lecture.annotations.md` |
+
+Nested folders are created automatically. Paths must remain inside the vault. Changing a storage setting does not move existing notes; the new location is used when a PDF is opened again. PDF files with the same basename can share a note in a common annotation folder, so use PDF-relative folders to keep those notes separate.
+
+### Pasted image storage
+
+**Pasted image location** offers three choices:
+
+- **Obsidian attachment folder**: follow Obsidian's attachment settings, using the annotation note as the source when available. This is the default.
+- **Relative to vault root**: use **Pasted images folder** from the vault root.
+- **Relative to PDF folder**: use **Pasted images folder** from the PDF's directory.
+
+An empty custom folder saves directly in the selected location. Set **Pasted image filename** without an extension; the correct image extension is added automatically. Duplicate names receive numeric suffixes. Existing images remain at their original paths.
+
+For example, choose a PDF-relative location, folder `Images/{filename}`, and filename `{filename}-{timestamp}` to keep each PDF's images together.
+
+### Template placeholders
+
+These placeholders work in annotation folders, pasted-image folders, and pasted-image filenames:
+
+| Placeholder | Meaning | Example |
+| --- | --- | --- |
+| `{filename}` | PDF filename without its extension | `Lecture` |
+| `{folder}` | Name of the PDF's immediate parent folder; empty at the vault root | `Math` |
+| `{date}` | Local date | `2026-10-16` |
+| `{time}` | Local time with filename-safe separators | `14-05-09` |
+| `{timestamp}` | Local date and time | `20261016140509` |
+| `{year}` | Four-digit year | `2026` |
+| `{month}` | Two-digit month | `10` |
+| `{day}` | Two-digit day | `16` |
+
+Annotation templates are evaluated when opening a PDF, and image templates when pasting. A date placeholder in an annotation folder therefore selects a different location on another day. Filenames cannot contain directory separators; configure those in the folder setting.
+
+## Storage and privacy
+
+The plugin reads PDFs and writes annotation notes, image attachments, and plugin settings inside your vault. It makes no network requests, collects no telemetry, requires no account or payment, and does not access files outside the vault. Obsidian's own sync services may sync these files if enabled.
+
+Annotation notes contain readable text summaries, links to PDF pages, and `pdf-annotations` fenced JSON blocks that store the drawings and positions. Keep those blocks intact to preserve annotations. Other PDF readers will not display these overlays because the annotations are not embedded in the PDF. Removing an image annotation does not delete its image attachment.
+
+Moving or renaming PDFs or annotation notes does not automatically migrate their stored association. Keep backups and reopen the original storage location if a changed path appears to have no annotations. Simultaneous editing of the same PDF in multiple panes is not coordinated.
+
+The runtime uses Obsidian and browser APIs rather than Node.js or Electron APIs. Desktop pop-out windows and mobile behavior still require manual verification before publishing; clipboard and keyboard behavior depend on the device.
+
+## Development
+
+Use Node.js 22 or newer and npm:
+
+```sh
+npm ci
+npm run dev
+```
+
+Develop in a test vault with this checkout at `.obsidian/plugins/pdf-annotator/`. The development build writes `main.js` and watches for changes. Reload the plugin after rebuilding.
+
+```sh
+npm test                 # Automated behavior tests
+npm run build           # Type-check and build the production bundle
+npm run check           # Validate release metadata, test, and build
+npm run release:prepare # Run all checks and copy installable files to dist/
+```
+
+The `dist/` directory contains `main.js`, `manifest.json`, and `styles.css` for installation or release upload. Generated bundles, local settings (`data.json`), and dependencies are not committed.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks and [RELEASING.md](RELEASING.md) for versioning, GitHub releases, and community submission. Report problems through this repository's Issues tab, including Obsidian version, device, steps to reproduce, and relevant console errors. Do not include private PDFs or notes.
+
+## License
+
+[MIT](LICENSE), copyright Joshua. PDF rendering uses the [PDF.js](https://github.com/mozilla/pdf.js) library bundled with Obsidian. The `pdfjs-dist` development dependency provides types and is not bundled into this plugin.

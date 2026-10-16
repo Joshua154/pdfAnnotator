@@ -1,0 +1,229 @@
+/* ===== PDF Annotator ===== */
+
+.pdf-annotator-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+	background: var(--background-secondary);
+}
+
+/* ---------- Toolbar ---------- */
+
+.pdf-annotator-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-wrap: wrap;
+	padding: 6px 10px;
+	background: var(--background-primary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	z-index: 10;
+	flex: 0 0 auto;
+}
+
+.pdf-annotator-toolbar .pdfann-tool-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	color: var(--icon-color);
+	background: transparent;
+	border: none;
+	padding: 0;
+	box-shadow: none;
+}
+
+.pdf-annotator-toolbar .pdfann-tool-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pdf-annotator-toolbar .pdfann-tool-btn.is-active {
+	background: var(--background-modifier-active-hover, var(--background-modifier-hover));
+	color: var(--interactive-accent);
+	box-shadow: inset 0 0 0 1.5px var(--interactive-accent);
+}
+
+.pdf-annotator-toolbar .pdfann-tool-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.pdfann-toolbar-sep {
+	width: 1px;
+	height: 22px;
+	background: var(--background-modifier-border);
+	margin: 0 4px;
+}
+
+.pdfann-color-swatch {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	cursor: pointer;
+	border: 2px solid transparent;
+	box-sizing: border-box;
+	padding: 0;
+}
+
+.pdfann-color-swatch.is-active {
+	border-color: var(--text-normal);
+	box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 3.5px var(--interactive-accent);
+}
+
+.pdfann-width-select,
+.pdfann-fontsize-select {
+	height: 28px;
+	font-size: var(--font-ui-small);
+}
+
+.pdfann-zoom-label {
+	min-width: 48px;
+	text-align: center;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	user-select: none;
+}
+
+.pdfann-toolbar-spacer {
+	flex: 1 1 auto;
+}
+
+/* ---------- Scroll area / pages ---------- */
+
+.pdf-annotator-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: 16px 0 32px;
+}
+
+.pdf-annotator-page {
+	position: relative;
+	margin: 0 auto 16px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+	background: white;
+	/* width/height set programmatically */
+}
+
+.pdf-annotator-page > canvas {
+	position: absolute;
+	top: 0;
+	left: 0;
+	display: block;
+}
+
+/* text layer (copied subset of pdf.js textLayer styling) */
+.pdf-annotator-textlayer {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	line-height: 1;
+	text-size-adjust: none;
+	forced-color-adjust: none;
+	transform-origin: 0 0;
+	caret-color: CanvasText;
+	z-index: 1;
+}
+
+.pdf-annotator-textlayer span {
+	color: transparent;
+	position: absolute;
+	white-space: pre;
+	cursor: text;
+	transform-origin: 0% 0%;
+}
+
+.pdf-annotator-textlayer ::selection {
+	background: rgba(0, 120, 215, 0.35);
+}
+
+/* text layer only interactive in text-highlight mode */
+.pdf-annotator-page.mode-draw .pdf-annotator-textlayer {
+	pointer-events: none;
+	user-select: none;
+}
+
+.pdf-annotator-page.mode-text-select .pdf-annotator-textlayer {
+	pointer-events: auto;
+	user-select: text;
+}
+
+/* ---------- Overlay ---------- */
+
+.pdf-annotator-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	touch-action: none;
+}
+
+.pdf-annotator-page.mode-text-select .pdf-annotator-overlay {
+	pointer-events: none;
+}
+
+.pdf-annotator-overlay .pdfann-item {
+	cursor: default;
+}
+
+.pdf-annotator-overlay.tool-select .pdfann-item {
+	cursor: move;
+}
+
+/* selection visuals */
+.pdfann-selection-rect {
+	fill: none;
+	stroke: var(--interactive-accent);
+	stroke-dasharray: 4 3;
+	vector-effect: non-scaling-stroke;
+	pointer-events: none;
+}
+
+.pdfann-resize-handle {
+	fill: var(--background-primary);
+	stroke: var(--interactive-accent);
+	vector-effect: non-scaling-stroke;
+}
+
+.pdfann-rubberband {
+	fill: rgba(0, 120, 215, 0.12);
+	stroke: var(--interactive-accent);
+	stroke-dasharray: 4 3;
+	vector-effect: non-scaling-stroke;
+	pointer-events: none;
+}
+
+/* ---------- Text box editing ---------- */
+
+.pdfann-textbox-editor {
+	position: absolute;
+	z-index: 5;
+	outline: 1.5px dashed var(--interactive-accent);
+	background: rgba(255, 255, 255, 0.85);
+	overflow: hidden;
+	box-sizing: border-box;
+	padding: 2px 4px;
+	font-family: var(--font-text);
+	min-width: 40px;
+	min-height: 1em;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* cursors per tool */
+.pdf-annotator-overlay.tool-pen,
+.pdf-annotator-overlay.tool-highlighter,
+.pdf-annotator-overlay.tool-shape {
+	cursor: crosshair;
+}
+
+.pdf-annotator-overlay.tool-eraser {
+	cursor: cell;
+}
+
+.pdf-annotator-overlay.tool-text {
+	cursor: text;
+}

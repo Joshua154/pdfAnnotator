@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Generated plugin bundle
+/main.js
+/main.js.map
+*.tsbuildinfo
+/dist/
+
+# Local Obsidian settings and hot reload marker
+/data.json
+/.hotreload
+
+# Local tooling and environment files
+/.agents/
+/.codex/
+/.aws/
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
