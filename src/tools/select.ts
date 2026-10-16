@@ -5,6 +5,8 @@ import {
 	findAnnotation,
 	scaleAnnotation,
 	translateAnnotation,
+	RichAnnotation,
+	isRichAnnotation,
 } from "../annotations/model";
 import { RemoveCommand, UpdateCommand } from "../history";
 import { PageOverlay } from "../overlay";
@@ -38,7 +40,10 @@ export class SelectTool implements Tool {
 	private lastClickTime = 0;
 	private lastClickId: string | null = null;
 
-	constructor(private textboxTool: TextBoxTool) {}
+	constructor(
+		private textboxTool: TextBoxTool,
+		private editRich?: (page: number, ann: RichAnnotation) => void,
+	) {}
 
 	onDeactivate(ctx: ToolContext): void {
 		this.clearSelection(ctx);
@@ -89,15 +94,17 @@ export class SelectTool implements Tool {
 		if (id) {
 			const ann = findAnnotation(ctx.doc, overlay.page, id);
 			if (ann) {
-				// Double-click on text box → edit
+				// Double-click on editable content → edit source or open drawing.
 				const now = Date.now();
 				if (
-					ann.type === "text" &&
+					(ann.type === "text" || isRichAnnotation(ann)) &&
 					this.lastClickId === id &&
 					now - this.lastClickTime < 400
 				) {
 					this.clearSelection(ctx);
-					this.textboxTool.beginEdit(overlay, ctx, ann);
+					this.drag = null;
+					if (ann.type === "text") this.textboxTool.beginEdit(overlay, ctx, ann);
+					else if (isRichAnnotation(ann)) this.editRich?.(overlay.page, ann);
 					this.lastClickId = null;
 					return;
 				}

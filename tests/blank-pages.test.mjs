@@ -21,6 +21,14 @@ const { outputFiles } = await build({
 				export class TFile {}
 				export class TFolder {}
 				export class Notice {}
+				export class Menu {}
+				export class Modal {}
+				export class FuzzySuggestModal {}
+				export class Component {}
+				export class MarkdownRenderer {}
+				export const loadMathJax = async () => {};
+				export const finishRenderMath = async () => {};
+				export const renderMath = () => {};
 				export const normalizePath = path => path;
 				export const setIcon = () => {};
 				export const loadPdfJs = () => { throw new Error("Blank pages must not request PDF rendering"); };

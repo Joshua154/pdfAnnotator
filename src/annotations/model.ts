@@ -12,7 +12,24 @@ export type AnnotationType =
 	| "text"
 	| "shape"
 	| "text-highlight"
-	| "image";
+	| "image"
+	| RichAnnotationType;
+
+export type RichAnnotationType = "latex" | "tikz" | "excalidraw";
+
+/** Editable math/diagram source, or the vault path of an Excalidraw drawing. */
+export interface RichAnnotation extends BaseAnnotation {
+	type: RichAnnotationType;
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+	source: string;
+}
+
+export function isRichAnnotation(ann: BaseAnnotation): ann is RichAnnotation {
+	return ann.type === "latex" || ann.type === "tikz" || ann.type === "excalidraw";
+}
 
 export type ShapeKind = "rect" | "ellipse" | "line" | "arrow";
 
@@ -88,7 +105,8 @@ export type Annotation =
 	| TextAnnotation
 	| ShapeAnnotation
 	| TextHighlightAnnotation
-	| ImageAnnotation;
+	| ImageAnnotation
+	| RichAnnotation;
 
 /** All annotations for a single page. */
 export interface PageAnnotations {
@@ -224,6 +242,9 @@ export function annotationBBox(ann: Annotation): {
 		}
 		case "text":
 		case "image":
+		case "latex":
+		case "tikz":
+		case "excalidraw":
 			return { x: ann.x, y: ann.y, w: ann.w, h: ann.h };
 		case "shape": {
 			const x = Math.min(ann.x, ann.x2);
@@ -268,6 +289,9 @@ export function translateAnnotation(
 			break;
 		case "text":
 		case "image":
+		case "latex":
+		case "tikz":
+		case "excalidraw":
 			ann.x += dx;
 			ann.y += dy;
 			break;
@@ -308,6 +332,9 @@ export function scaleAnnotation(
 			break;
 		case "image":
 		case "text":
+		case "latex":
+		case "tikz":
+		case "excalidraw":
 			ann.x = mapX(ann.x);
 			ann.y = mapY(ann.y);
 			ann.w *= sx;

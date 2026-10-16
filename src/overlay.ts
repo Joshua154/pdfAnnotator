@@ -6,9 +6,13 @@ import {
 	TextAnnotation,
 	TextHighlightAnnotation,
 	annotationBBox,
+	RichAnnotation,
+	isRichAnnotation,
 } from "./annotations/model";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+
+export type RichAnnotationRenderer = (ann: RichAnnotation, container: HTMLElement) => () => void;
 
 /**
  * Per-page SVG overlay. The viewBox equals the PDF page size in user-space
@@ -27,12 +31,14 @@ export class PageOverlay {
 	readonly page: number;
 	readonly pdfWidth: number;
 	readonly pdfHeight: number;
+	private richItems = new Map<string, { group: SVGElement; key: string; dispose: () => void }>();
 
 	constructor(
 		parent: HTMLElement,
 		page: number,
 		pdfWidth: number,
-		pdfHeight: number
+		pdfHeight: number,
+		private renderRich?: RichAnnotationRenderer
 	) {
 		this.page = page;
 		this.pdfWidth = pdfWidth;
@@ -77,11 +83,50 @@ export class PageOverlay {
 
 	/** Re-render all committed annotations. */
 	renderItems(items: Annotation[]): void {
-		this.itemsLayer.replaceChildren();
-		for (const ann of items) {
-			const el = renderAnnotation(ann);
-			if (el) this.itemsLayer.appendChild(el);
+		const keep = new Set<SVGElement>();
+		for (const [index, ann] of items.entries()) {
+			let el: SVGElement | null;
+			if (isRichAnnotation(ann)) {
+				const key = JSON.stringify([ann.type, ann.source]);
+				let cached = this.richItems.get(ann.id);
+				if (cached && cached.key !== key) {
+					this.invalidateRich(ann.id);
+					cached = undefined;
+				}
+				if (!cached) {
+					const group = renderRichFrame(ann);
+					this.itemsLayer.appendChild(group);
+					const container = group.querySelector<HTMLElement>(".pdfann-rich-viewport")!;
+					const dispose = this.renderRich?.(ann, container) ?? (() => {});
+					cached = { group, key, dispose };
+					this.richItems.set(ann.id, cached);
+				}
+				el = cached.group;
+				// Keep rendered content alive while moving/resizing or drawing nearby.
+				for (const child of Array.from(el.children)) setRichBounds(child, ann);
+			} else {
+				el = renderAnnotation(ann);
+			}
+			if (el) {
+				keep.add(el);
+				const before = this.itemsLayer.children[index] ?? null;
+				if (before !== el) this.itemsLayer.insertBefore(el, before);
+			}
 		}
+		for (const [id, cached] of this.richItems) {
+			if (!keep.has(cached.group)) this.invalidateRich(id);
+		}
+		for (const child of Array.from(this.itemsLayer.children)) {
+			if (!keep.has(child as SVGElement)) child.remove();
+		}
+	}
+
+	invalidateRich(id: string): void {
+		const cached = this.richItems.get(id);
+		if (!cached) return;
+		cached.dispose();
+		cached.group.remove();
+		this.richItems.delete(id);
 	}
 
 	clearDraft(): void {
@@ -122,6 +167,7 @@ export class PageOverlay {
 	}
 
 	destroy(): void {
+		for (const id of this.richItems.keys()) this.invalidateRich(id);
 		this.svg.remove();
 	}
 }
@@ -153,6 +199,10 @@ export function renderAnnotation(ann: Annotation): SVGElement | null {
 			return renderTextHighlight(ann);
 		case "image":
 			return renderImage(ann);
+		case "latex":
+		case "tikz":
+		case "excalidraw":
+			return renderRichFrame(ann);
 		default:
 			return null;
 	}
@@ -182,6 +232,28 @@ function baseGroup(ann: Annotation): SVGGElement {
 	const g = document.createElementNS(SVG_NS, "g");
 	g.setAttribute("data-ann-id", ann.id);
 	g.classList.add("pdfann-item");
+	return g;
+}
+
+function setRichBounds(el: Element, ann: RichAnnotation): void {
+	el.setAttribute("x", String(ann.x));
+	el.setAttribute("y", String(ann.y));
+	el.setAttribute("width", String(ann.w));
+	el.setAttribute("height", String(ann.h));
+}
+
+function renderRichFrame(ann: RichAnnotation): SVGGElement {
+	const g = baseGroup(ann);
+	const hit = document.createElementNS(SVG_NS, "rect");
+	hit.setAttribute("fill", "transparent");
+	setRichBounds(hit, ann);
+	const fo = document.createElementNS(SVG_NS, "foreignObject");
+	setRichBounds(fo, ann);
+	fo.style.pointerEvents = "none";
+	const div = document.createElement("div");
+	div.className = "pdfann-rich-viewport";
+	fo.appendChild(div);
+	g.append(hit, fo);
 	return g;
 }
 
@@ -389,7 +461,10 @@ export function annotationHit(
 			return false;
 		}
 		case "text":
-		case "image": {
+		case "image":
+		case "latex":
+		case "tikz":
+		case "excalidraw": {
 			const b = annotationBBox(ann);
 			return (
 				x >= b.x - tolerance &&

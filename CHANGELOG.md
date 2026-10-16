@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add an Insert menu for editable LaTeX math, TikZ diagrams, and linked Excalidraw drawings, with previews, persistence, selection, resizing, and undo/redo. TikZ and Excalidraw rendering use installed community plugins.
+
 ## 0.1.0
 
 - Add PDF drawing, freehand and text highlights, shapes, text boxes, images, selection, and undo/redo.

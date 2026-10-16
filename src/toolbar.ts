@@ -1,5 +1,5 @@
-import { setIcon } from "obsidian";
-import { ShapeKind } from "./annotations/model";
+import { Menu, setIcon } from "obsidian";
+import { RichAnnotationType, ShapeKind } from "./annotations/model";
 import { ToolId, ToolOptions } from "./tools/tool";
 
 export interface ToolbarCallbacks {
@@ -13,6 +13,7 @@ export interface ToolbarCallbacks {
 	onFitHeight(): void;
 	onOpenNote(): void;
 	onInsertBlankPage(): void;
+	onInsertRich(type: RichAnnotationType): void;
 }
 
 const PRESET_COLORS = [
@@ -40,6 +41,7 @@ export class Toolbar {
 	private undoBtn!: HTMLButtonElement;
 	private redoBtn!: HTMLButtonElement;
 	private insertBlankPageBtn!: HTMLButtonElement;
+	private insertRichBtn!: HTMLButtonElement;
 	private zoomLabel!: HTMLElement;
 	private activeTool: ToolId;
 
@@ -89,6 +91,18 @@ export class Toolbar {
 			const btn = this.toolBtn(icon, tip, () => this.cb.onToolSelect(id));
 			this.toolButtons.set(id, btn);
 		}
+		this.insertRichBtn = this.toolBtn("plus", "Insert LaTeX, TikZ, or Excalidraw", () => {
+			const menu = new Menu();
+			for (const [type, title, icon] of [
+				["latex", "Insert LaTeX", "sigma"],
+				["tikz", "Insert TikZ", "workflow"],
+				["excalidraw", "Insert Excalidraw drawing", "pencil-ruler"],
+			] as const) {
+				menu.addItem((item) => item.setTitle(title).setIcon(icon).onClick(() => this.cb.onInsertRich(type)));
+			}
+			const rect = this.insertRichBtn.getBoundingClientRect();
+			menu.showAtPosition({ x: rect.left, y: rect.bottom });
+		});
 
 		// --- shapes (each selects shape tool with a kind) ---
 		this.sep();
@@ -193,6 +207,7 @@ export class Toolbar {
 
 	setInsertBlankPageEnabled(enabled: boolean): void {
 		this.insertBlankPageBtn.disabled = !enabled;
+		this.insertRichBtn.disabled = !enabled;
 	}
 
 	private pickColor(color: string): void {

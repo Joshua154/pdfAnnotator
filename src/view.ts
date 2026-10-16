@@ -1,5 +1,6 @@
 import {
 	FileView,
+	Modal,
 	Notice,
 	Scope,
 	TFile,
@@ -16,15 +17,20 @@ import {
 	documentPageOrder,
 	generateId,
 	getOrCreatePage,
+	RichAnnotation,
+	RichAnnotationType,
+	findAnnotation,
 } from "./annotations/model";
 import { AnnotationStore } from "./annotations/store";
-import { AddCommand, History, InsertBlankPageCommand } from "./history";
+import { AddCommand, History, InsertBlankPageCommand, UpdateCommand } from "./history";
 import type PdfAnnotatorPlugin from "./main";
 import { PageOverlay, setImageSrcResolver } from "./overlay";
 import { loadPdfDocument, renderPage } from "./pdf-renderer";
 import { Toolbar } from "./toolbar";
 import { pastedImagePath } from "./storage-paths";
 import { PageNavigation } from "./page-navigation";
+import { ExcalidrawPicker, SourceModal } from "./insert-modal";
+import { mountRichContent } from "./rich-content";
 import { EraserTool } from "./tools/eraser";
 import { HighlighterTool } from "./tools/highlighter";
 import { PenTool } from "./tools/pen";
@@ -73,6 +79,7 @@ export class PDFAnnotatorView extends FileView {
 	private toolCtx: ToolContext;
 	private selectTool: SelectTool;
 	private textHighlightTool: TextHighlightTool;
+	private insertionModal: Modal | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: PdfAnnotatorPlugin) {
 		super(leaf);
@@ -115,7 +122,7 @@ export class PDFAnnotatorView extends FileView {
 
 		// Instantiate tools
 		const textbox = new TextBoxTool();
-		this.selectTool = new SelectTool(textbox);
+		this.selectTool = new SelectTool(textbox, (page, ann) => this.editRich(page, ann));
 		this.textHighlightTool = new TextHighlightTool();
 		this.textHighlightTool.resolveOverlay = (el) => {
 			const idx = this.pageEls.findIndex((p) => p.textLayer === el);
@@ -143,6 +150,15 @@ export class PDFAnnotatorView extends FileView {
 		};
 		this.registerKeyHandlers();
 		this.registerPasteHandler();
+		this.registerEvent(this.app.vault.on("modify", (file) => {
+			for (const p of this.pageEls) {
+				const drawings = this.annDoc.pages.get(p.page)?.items.filter(
+					(ann) => ann.type === "excalidraw" && ann.source === file.path,
+				) ?? [];
+				for (const ann of drawings) p.overlay?.invalidateRich(ann.id);
+				if (drawings.length) this.renderOverlay(p.page);
+			}
+		}));
 	}
 
 	getViewType(): string {
@@ -213,6 +229,8 @@ export class PDFAnnotatorView extends FileView {
 	}
 
 	private deactivateTools(): void {
+		this.insertionModal?.close();
+		this.insertionModal = null;
 		// Select can also open the text editor, so deactivate every tool.
 		for (const tool of this.tools.values()) tool.onDeactivate?.(this.toolCtx);
 		this.activeTool = null;
@@ -263,6 +281,7 @@ export class PDFAnnotatorView extends FileView {
 			onFitHeight: () => this.fitHeight(),
 			onOpenNote: () => this.openNote(),
 			onInsertBlankPage: () => this.insertBlankPage(),
+			onInsertRich: (type) => this.insertRich(type),
 		}, this.plugin.settings.defaultTool);
 
 		this.scrollEl = root.createDiv({ cls: "pdf-annotator-scroll" });
@@ -367,7 +386,7 @@ export class PDFAnnotatorView extends FileView {
 				container,
 				canvas: container.createEl("canvas"),
 				textLayer: container.createDiv({ cls: "pdf-annotator-textlayer" }),
-				overlay: new PageOverlay(container, blank.page, blank.width, blank.height),
+				overlay: new PageOverlay(container, blank.page, blank.width, blank.height, this.renderRich),
 				rendered: true,
 				pdfWidth: blank.width,
 				pdfHeight: blank.height,
@@ -433,7 +452,8 @@ export class PDFAnnotatorView extends FileView {
 				p.container,
 				pageNum,
 				info.pdfWidth,
-				info.pdfHeight
+				info.pdfHeight,
+				this.renderRich
 			);
 			this.attachOverlayEvents(p.overlay);
 			this.applyToolClasses(p);
@@ -588,6 +608,73 @@ export class PDFAnnotatorView extends FileView {
 				this.scrollEl.focus({ preventScroll: true });
 			}
 		}, true); // Focus before a tool opens its own text editor.
+	}
+
+	// ------------------------------------------------------------------
+	// Math and diagrams
+	// ------------------------------------------------------------------
+
+	private renderRich = (ann: RichAnnotation, container: HTMLElement): (() => void) =>
+		mountRichContent(this.app, ann, container, this.noteFile?.path ?? this.file?.path ?? "");
+
+	private insertRich(type: RichAnnotationType): void {
+		if (!this.noteFile) return;
+		const pageNum = this.currentPageNum();
+		const page = this.pageEls.find((p) => p.page === pageNum);
+		if (!page) return;
+		const note = this.noteFile;
+		this.deactivateTools(); // Commit text before opening a modal.
+		this.setTool("select");
+		const insert = (source: string) => {
+			if (this.noteFile !== note || !this.pageEls.includes(page)) return;
+			const w = Math.min(type === "latex" ? 240 : 300, page.pdfWidth * 0.8);
+			const h = Math.min(type === "latex" ? 80 : 220, page.pdfHeight * 0.8);
+			const position = this.insertionPosition(page, w, h);
+			const ann: RichAnnotation = { id: generateId(), type, source, ...position, w, h };
+			this.history.execute(this.annDoc, new AddCommand(page.page, ann));
+			this.scheduleSave();
+			this.scrollEl?.focus({ preventScroll: true });
+		};
+		this.insertionModal = type === "excalidraw"
+			? new ExcalidrawPicker(this.app, (file) => insert(file.path))
+			: new SourceModal(this.app, type, note.path, undefined, insert);
+		this.insertionModal.open();
+	}
+
+	private editRich(page: number, ann: RichAnnotation): void {
+		if (ann.type === "excalidraw") {
+			const file = this.app.vault.getAbstractFileByPath(ann.source);
+			if (file instanceof TFile) {
+				void this.app.workspace.getLeaf("split").openFile(file).catch(() => new Notice("Could not open the Excalidraw drawing."));
+			} else new Notice(`Drawing not found: ${ann.source}`);
+			return;
+		}
+		const note = this.noteFile;
+		if (!note) return;
+		this.insertionModal?.close();
+		this.insertionModal = new SourceModal(this.app, ann.type, note.path, ann.source, (source) => {
+			const current = findAnnotation(this.annDoc, page, ann.id);
+			if (this.noteFile !== note || !current || current.type !== ann.type || source === ann.source) return;
+			this.history.execute(this.annDoc, new UpdateCommand(page, current, { ...current, source }));
+			this.scheduleSave();
+		});
+		this.insertionModal.open();
+	}
+
+	/** Center new content in the visible part of the selected page. */
+	private insertionPosition(page: PageEl, w: number, h: number): { x: number; y: number } {
+		let cy = page.pdfHeight / 2;
+		if (this.scrollEl) {
+			const rect = page.container.getBoundingClientRect();
+			const view = this.scrollEl.getBoundingClientRect();
+			const top = Math.max(rect.top, view.top);
+			const bottom = Math.min(rect.bottom, view.bottom);
+			if (bottom > top && rect.height > 0) cy = ((top + bottom) / 2 - rect.top) / rect.height * page.pdfHeight;
+		}
+		return {
+			x: Math.max(0, (page.pdfWidth - w) / 2),
+			y: Math.max(0, Math.min(cy - h / 2, page.pdfHeight - h)),
+		};
 	}
 
 	// ------------------------------------------------------------------

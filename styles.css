@@ -227,3 +227,73 @@
 .pdf-annotator-overlay.tool-text {
 	cursor: text;
 }
+
+/* ---------- Math and diagram annotations ---------- */
+
+.pdfann-rich-viewport {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	color: #111;
+	background: transparent;
+	--text-normal: #111;
+	--background-primary: white;
+}
+
+.pdfann-rich-content {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: max-content;
+	font-size: 24px;
+	line-height: 1.25;
+	transform-origin: 0 0;
+}
+
+.pdfann-rich-content > *,
+.pdfann-rich-content p,
+.pdfann-rich-content mjx-container[display="true"] {
+	margin: 0 !important;
+}
+
+.pdfann-rich-content .internal-embed {
+	display: block;
+	max-width: none;
+}
+
+.pdfann-rich-status {
+	padding: 8px;
+	font-size: 12px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.pdfann-source-modal {
+	width: min(680px, 90vw);
+}
+
+.pdfann-source-input {
+	width: 100%;
+	resize: vertical;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+}
+
+.pdfann-source-preview {
+	height: 220px;
+	margin: 12px 0;
+	background: white;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+}
+
+.pdfann-source-error {
+	color: var(--text-error);
+}
+
+.pdfann-source-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}

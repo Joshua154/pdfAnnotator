@@ -134,6 +134,9 @@ function compactAnnotation(ann: Annotation): Annotation {
 			break;
 		case "text":
 		case "image":
+		case "latex":
+		case "tikz":
+		case "excalidraw":
 			a.x = round2(a.x);
 			a.y = round2(a.y);
 			a.w = round2(a.w);
@@ -160,6 +163,15 @@ function compactAnnotation(ann: Annotation): Annotation {
 
 function summaryLine(ann: Annotation): string | null {
 	switch (ann.type) {
+		case "latex":
+		case "tikz": {
+			// A long enough fence preserves arbitrary source without creating extra blocks.
+			const fence = "`".repeat(Math.max(3, ...Array.from(ann.source.matchAll(/`+/g), (m) => m[0].length + 1)));
+			const block = `${fence}${ann.type}\n${ann.source}\n${fence}`.split("\n").map((line) => `  ${line}`).join("\n");
+			return `- ${ann.type === "latex" ? "LaTeX" : "TikZ"}:\n\n${block}`;
+		}
+		case "excalidraw":
+			return `- Excalidraw: ![[${ann.source}]]`;
 		case "text": {
 			const text = ann.text.replace(/\s+/g, " ").trim();
 			return text ? `- Text note: "${text}"` : null;
@@ -313,6 +325,12 @@ function isValidAnnotation(a: unknown): a is Annotation {
 	const ann = a as Partial<Annotation>;
 	if (typeof ann.id !== "string") return false;
 	switch (ann.type) {
+		case "latex":
+		case "tikz":
+		case "excalidraw":
+			return typeof ann.source === "string" && ann.source.trim().length > 0 &&
+				Number.isFinite(ann.x) && Number.isFinite(ann.y) &&
+				Number.isFinite(ann.w) && ann.w! > 0 && Number.isFinite(ann.h) && ann.h! > 0;
 		case "ink":
 			return Array.isArray((ann as { points?: unknown }).points);
 		case "text":

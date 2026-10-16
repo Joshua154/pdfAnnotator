@@ -6,6 +6,7 @@ Draw, highlight, and add text, shapes, and images to PDFs in Obsidian. Annotatio
 
 - Pen, freehand highlighter, eraser, and text selection highlighting.
 - Text boxes, rectangles, ellipses, lines, and arrows.
+- Insert editable LaTeX math, TikZ diagrams, and linked Excalidraw drawings.
 - Select, move, resize, and delete annotations, with undo and redo.
 - Paste images from the clipboard and configure their storage folders and filenames.
 - Zoom, fit to width or height, page snapping, and smooth keyboard scrolling.
@@ -35,6 +36,22 @@ Select a tool in the toolbar, then draw or click on a page. For text highlightin
 Use **Select** to move or resize an annotation, or select it and press Delete. Click a text annotation twice with Select to edit it. Click outside a text box or press Ctrl/Cmd+Enter to save its text; Escape cancels editing.
 
 Paste a clipboard image with Ctrl/Cmd+V while the annotator is focused. The image is saved as a vault file and can then be moved or resized. Use **Open annotation note** in the toolbar to see the generated Markdown.
+
+### LaTeX, TikZ, and Excalidraw
+
+Use the **+** toolbar button (**Insert LaTeX, TikZ, or Excalidraw**) to insert content on the current PDF or blank page:
+
+- **Insert LaTeX** opens a source editor for math expressions, rendered with Obsidian's built-in MathJax. Enter an expression such as `\frac{a}{b}`; surrounding `$`, `$$`, `\(`, or `\[` delimiters are optional. This supports MathJax math, not full LaTeX documents.
+- **Insert TikZ** opens a source editor with an example diagram. Enable a community plugin that renders `tikz` code blocks, such as [TikZJax](https://github.com/artisticat1/obsidian-tikzjax). Enter a `tikzpicture` environment or a complete document; a `document` wrapper is added when absent. Available packages and rendering behavior depend on that plugin.
+- **Insert Excalidraw drawing** searches existing vault drawings, including `.excalidraw`, `.excalidraw.md`, and Markdown files with `excalidraw-plugin` frontmatter. Create drawings with the [Excalidraw plugin](https://github.com/zsviczian/obsidian-excalidraw-plugin) first and keep it enabled to display them.
+
+For LaTeX and TikZ, click **Preview** after editing, then **Insert** or **Save** (Ctrl/Cmd+Enter). **Cancel** or Escape discards changes. Source is retained even when a renderer is unavailable, with a message in place of the preview.
+
+Use **Select** to move, resize, or delete inserted content. Click it twice to edit LaTeX/TikZ source or open the linked Excalidraw drawing in another pane. Saving a linked drawing refreshes its PDF annotation. Insertions, source edits, moves, resizes, and deletions support undo/redo; edits made inside Excalidraw use Excalidraw's own history. Removing an annotation keeps the source drawing in the vault. Renaming or moving a linked drawing requires reinserting it.
+
+Sources, drawing paths, and positions are saved in the annotation note and restored when the PDF reopens. TikZ and Excalidraw rendering is delegated to their plugins, whose own settings and network behavior apply.
+
+### Blank pages
 
 Use **Insert blank page after current page** (the file-plus toolbar button) to add annotation space after the page you are viewing. The new page matches its size and supports drawing, text, shapes, and pasted images. You can insert several blank pages, including after another blank page, and undo or redo insertion. Blank pages, including empty ones, are saved in the annotation note and restored when you reopen the PDF in the annotator. They do not change the original PDF or its page links and do not appear in other PDF readers.
 
