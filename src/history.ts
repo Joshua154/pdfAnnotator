@@ -4,6 +4,7 @@ import {
 	BlankPage,
 	addAnnotation,
 	cloneAnnotation,
+	getOrCreatePage,
 	removeAnnotation,
 } from "./annotations/model";
 
@@ -13,7 +14,41 @@ export interface Command {
 	revert(doc: AnnotationDocument): void;
 	/** Page affected, so the view knows what to re-render. */
 	page: number;
+	/** All affected pages for an atomic edit spanning several pages. */
+	pages?: number[];
 	layoutChanged?: boolean;
+}
+
+export interface AnnotationLocation {
+	page: number;
+	index: number;
+	ann: Annotation;
+}
+
+/** Replace a set of annotations atomically, retaining their stacking order on undo. */
+export class ChangeAnnotationsCommand implements Command {
+	readonly page: number;
+	readonly pages: number[];
+	private before: AnnotationLocation[];
+	private after: AnnotationLocation[];
+
+	constructor(before: AnnotationLocation[], after: AnnotationLocation[]) {
+		const copy = (items: AnnotationLocation[]) => items.map(item => ({ ...item, ann: cloneAnnotation(item.ann) }));
+		this.before = copy(before);
+		this.after = copy(after);
+		this.pages = [...new Set([...before, ...after].map(item => item.page))];
+		this.page = this.pages[0];
+	}
+
+	apply(doc: AnnotationDocument): void { this.replace(doc, this.before, this.after); }
+	revert(doc: AnnotationDocument): void { this.replace(doc, this.after, this.before); }
+
+	private replace(doc: AnnotationDocument, remove: AnnotationLocation[], insert: AnnotationLocation[]): void {
+		for (const item of remove) removeAnnotation(doc, item.page, item.ann.id);
+		for (const item of [...insert].sort((a, b) => a.index - b.index)) {
+			getOrCreatePage(doc, item.page).items.splice(item.index, 0, cloneAnnotation(item.ann));
+		}
+	}
 }
 
 export class InsertBlankPageCommand implements Command {
@@ -79,7 +114,7 @@ export class History {
 	private limit = 200;
 
 	/** Callback fired after any apply/revert so the view can refresh. */
-	onChange: ((page: number, layoutChanged?: boolean) => void) | null = null;
+	onChange: ((page: number, layoutChanged?: boolean, pages?: number[]) => void) | null = null;
 
 	/** Execute a command and push it onto the undo stack. */
 	execute(doc: AnnotationDocument, cmd: Command): void {
@@ -87,7 +122,7 @@ export class History {
 		this.undoStack.push(cmd);
 		if (this.undoStack.length > this.limit) this.undoStack.shift();
 		this.redoStack.length = 0;
-		this.onChange?.(cmd.page, cmd.layoutChanged);
+		this.onChange?.(cmd.page, cmd.layoutChanged, cmd.pages);
 	}
 
 	/** Push a command that has ALREADY been applied to the model. */
@@ -95,7 +130,7 @@ export class History {
 		this.undoStack.push(cmd);
 		if (this.undoStack.length > this.limit) this.undoStack.shift();
 		this.redoStack.length = 0;
-		this.onChange?.(cmd.page, cmd.layoutChanged);
+		this.onChange?.(cmd.page, cmd.layoutChanged, cmd.pages);
 	}
 
 	undo(doc: AnnotationDocument): boolean {
@@ -103,7 +138,7 @@ export class History {
 		if (!cmd) return false;
 		cmd.revert(doc);
 		this.redoStack.push(cmd);
-		this.onChange?.(cmd.page, cmd.layoutChanged);
+		this.onChange?.(cmd.page, cmd.layoutChanged, cmd.pages);
 		return true;
 	}
 
@@ -112,7 +147,7 @@ export class History {
 		if (!cmd) return false;
 		cmd.apply(doc);
 		this.undoStack.push(cmd);
-		this.onChange?.(cmd.page, cmd.layoutChanged);
+		this.onChange?.(cmd.page, cmd.layoutChanged, cmd.pages);
 		return true;
 	}
 

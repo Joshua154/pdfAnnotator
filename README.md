@@ -8,6 +8,7 @@ Draw, highlight, and add text, shapes, and images to PDFs in Obsidian. Annotatio
 - Text boxes, rectangles, ellipses, lines, and arrows.
 - Insert editable LaTeX math, TikZ diagrams, and linked Excalidraw drawings.
 - Select, move, resize, and delete annotations, with undo and redo.
+- Cut, copy, paste, and drag selections across PDF and blank pages.
 - Paste images from the clipboard and configure their storage folders and filenames.
 - Zoom, fit to width or height, page snapping, and smooth keyboard scrolling.
 - Insert blank pages for extra annotation space, with undo and redo.
@@ -34,6 +35,10 @@ Right-click a PDF in the file explorer and choose **Annotate PDF**, or open a PD
 Select a tool in the toolbar, then draw or click on a page. For text highlighting, choose **Highlight PDF text** and select text in the PDF. Text highlighting requires a PDF with selectable text; scanned documents need OCR from another tool first.
 
 Use **Select** to move or resize an annotation, or select it and press Delete. Click a text annotation twice with Select to edit it. Click outside a text box or press Ctrl/Cmd+Enter to save its text; Escape cancels editing.
+
+Shift-click annotations to add or remove them from a selection, including on other pages. Ctrl/Cmd+A with Select active selects all annotations in the document. Use Ctrl/Cmd+C to copy or Ctrl/Cmd+X to cut, then click empty space on a destination page and press Ctrl/Cmd+V. Without a destination click, paste uses the page currently in view. Pasted annotations receive new IDs; images and drawings keep their existing attachment links.
+
+Drag any selected annotation to move the whole selection to another page. Hold near the top or bottom of the viewer to scroll while dragging, or use the mouse wheel. Selections spanning multiple pages retain their relative page spacing, including blank pages. The destination must have enough pages for the entire selection; insert blank pages first if needed. Each cut, paste, drag, or deletion is one undo step. Escape cancels an in-progress drag, and dropping outside the pages leaves the selection in place. Moving or copying a PDF text highlight detaches its original text-selection link while retaining its quoted text and highlight rectangles.
 
 Paste a clipboard image with Ctrl/Cmd+V while the annotator is focused. The image is saved as a vault file and can then be moved or resized. Use **Open annotation note** in the toolbar to see the generated Markdown.
 
@@ -70,8 +75,11 @@ Click the PDF first to focus the viewer. Shortcuts are ignored while typing in a
 | T | Text box |
 | S | Highlight selected PDF text |
 | R / O / L / A | Rectangle / ellipse / line / arrow |
-| Delete / Backspace | Delete the selected annotation |
-| Escape | Clear selection or cancel text editing |
+| Shift-click | Add/remove an annotation from the selection, across pages |
+| Ctrl/Cmd+A | Select all annotations (Select tool) |
+| Ctrl/Cmd+X / C / V | Cut / copy / paste annotations across pages |
+| Delete / Backspace | Delete selected annotations |
+| Escape | Cancel dragging, clear selection, or cancel text editing |
 | Ctrl/Cmd+Z | Undo |
 | Ctrl/Cmd+Shift+Z | Redo |
 | Ctrl/Cmd+Y | Redo |

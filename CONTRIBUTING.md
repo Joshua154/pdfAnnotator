@@ -18,6 +18,7 @@ Use disposable PDFs and notes in a test vault:
 
 - Open a PDF through the file menu and command palette, including an existing inactive tab.
 - Draw, highlight selectable text, add shapes and text, paste an image, move/resize/delete an annotation, and undo/redo.
+- Shift-select annotations across PDF and blank pages, cut/copy/paste, and drag them across several pages at different zoom levels. Test edge scrolling, mouse-wheel scrolling, Escape, dropping in gaps or outside the viewer, and insufficient destination pages. Undo/redo must restore every affected page and its stacking order. Verify normal text clipboard behavior inside editors and image pasting still work.
 - Close and reopen the PDF; verify annotations and pasted images restore correctly.
 - Insert LaTeX, TikZ (with and without a TikZ renderer), and Excalidraw drawings (with and without Excalidraw enabled). Preview/edit source, cancel, move/resize, undo/redo, and reopen on PDF and blank pages. Save a linked drawing in another pane and check its preview refreshes. Close a view while rendering is pending and check for orphaned components or errors.
 - Open the Markdown note and follow a page link. Confirm the original PDF is unchanged.

@@ -37,6 +37,12 @@ export interface ToolContext {
 	getPageContainer(page: number): HTMLElement | null;
 	/** Current zoom (CSS px per PDF unit). */
 	getZoom(): number;
+	/** Display order includes both PDF pages and inserted blank pages. */
+	getPageOrder(): number[];
+	/** Obtain an overlay even if the PDF canvas has not rendered yet. */
+	getPageOverlay(page: number): PageOverlay | null;
+	getOverlayAtPoint(clientX: number, clientY: number): PageOverlay | null;
+	getScrollContainer(): HTMLElement | null;
 }
 
 /**
@@ -62,6 +68,7 @@ export interface Tool {
 		overlay: PageOverlay,
 		ctx: ToolContext
 	): void;
+	onPointerCancel?(evt: PointerEvent, overlay: PageOverlay, ctx: ToolContext): void;
 	/** Key handling while the tool is active (e.g. Delete in select tool). */
 	onKeyDown?(evt: KeyboardEvent, ctx: ToolContext): boolean;
 }

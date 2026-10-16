@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add multi-page annotation selection, cut/copy/paste, and drag-and-drop across PDF and blank pages, with automatic scrolling and atomic undo/redo.
 - Add an Insert menu for editable LaTeX math, TikZ diagrams, and linked Excalidraw drawings, with previews, persistence, selection, resizing, and undo/redo. TikZ and Excalidraw rendering use installed community plugins.
 
 ## 0.1.0

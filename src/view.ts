@@ -22,6 +22,7 @@ import {
 	findAnnotation,
 } from "./annotations/model";
 import { AnnotationStore } from "./annotations/store";
+import { readAnnotations, writeAnnotations } from "./annotation-clipboard";
 import { AddCommand, History, InsertBlankPageCommand, UpdateCommand } from "./history";
 import type PdfAnnotatorPlugin from "./main";
 import { PageOverlay, setImageSrcResolver } from "./overlay";
@@ -80,6 +81,7 @@ export class PDFAnnotatorView extends FileView {
 	private selectTool: SelectTool;
 	private textHighlightTool: TextHighlightTool;
 	private insertionModal: Modal | null = null;
+	private pasteTarget: { page: number; point: [number, number] } | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: PdfAnnotatorPlugin) {
 		super(leaf);
@@ -118,6 +120,10 @@ export class PDFAnnotatorView extends FileView {
 			getPageContainer: (page) =>
 				this.pageEls.find((p) => p.page === page)?.container ?? null,
 			getZoom: () => this.zoom,
+			getPageOrder: () => this.pageEls.map(p => p.page),
+			getPageOverlay: (page) => this.ensureOverlay(page),
+			getOverlayAtPoint: (x, y) => this.overlayAtPoint(x, y),
+			getScrollContainer: () => this.scrollEl,
 		};
 
 		// Instantiate tools
@@ -139,9 +145,9 @@ export class PDFAnnotatorView extends FileView {
 		];
 		for (const t of toolList) this.tools.set(t.id, t);
 
-		this.history.onChange = (page, layoutChanged) => {
+		this.history.onChange = (page, layoutChanged, pages) => {
 			if (layoutChanged) this.syncBlankPages();
-			this.renderOverlay(page);
+			for (const affected of pages ?? [page]) this.renderOverlay(affected);
 			this.toolbar?.setUndoRedoState(
 				this.history.canUndo,
 				this.history.canRedo
@@ -149,7 +155,7 @@ export class PDFAnnotatorView extends FileView {
 			this.selectTool.refresh(this.toolCtx);
 		};
 		this.registerKeyHandlers();
-		this.registerPasteHandler();
+		this.registerClipboardHandlers();
 		this.registerEvent(this.app.vault.on("modify", (file) => {
 			for (const p of this.pageEls) {
 				const drawings = this.annDoc.pages.get(p.page)?.items.filter(
@@ -245,6 +251,7 @@ export class PDFAnnotatorView extends FileView {
 		this.intersectionObserver = null;
 		for (const p of this.pageEls) p.overlay?.destroy();
 		this.pageEls = [];
+		this.pasteTarget = null;
 		void this.pdfDoc?.destroy().catch(() => {});
 		this.pdfDoc = null;
 		this.noteFile = null;
@@ -286,6 +293,10 @@ export class PDFAnnotatorView extends FileView {
 
 		this.scrollEl = root.createDiv({ cls: "pdf-annotator-scroll" });
 		this.scrollEl.tabIndex = 0;
+		this.scrollEl.addEventListener("scroll", () => {
+			this.pasteTarget = null;
+			this.selectTool.onScroll(this.toolCtx);
+		}, { passive: true });
 		this.pageNavigation = new PageNavigation(
 			this.scrollEl,
 			() => this.pageEls.map((page) => page.container)
@@ -463,6 +474,7 @@ export class PDFAnnotatorView extends FileView {
 			Math.floor(info.pdfHeight * this.zoom)
 		);
 		this.renderOverlay(pageNum);
+		this.selectTool.refresh(this.toolCtx);
 	}
 
 	private renderOverlay(pageNum: number): void {
@@ -472,9 +484,36 @@ export class PDFAnnotatorView extends FileView {
 		p.overlay.renderItems(items);
 	}
 
+	/** Annotation interactions need not wait for lazy PDF canvas rendering. */
+	private ensureOverlay(pageNum: number): PageOverlay | null {
+		const p = this.pageEls.find(p => p.page === pageNum);
+		if (!p) return null;
+		if (!p.overlay) {
+			p.overlay = new PageOverlay(p.container, p.page, p.pdfWidth, p.pdfHeight, this.renderRich);
+			this.attachOverlayEvents(p.overlay);
+			this.applyPageSize(p);
+			this.applyToolClasses(p);
+			this.renderOverlay(p.page);
+		}
+		return p.overlay;
+	}
+
+	private overlayAtPoint(x: number, y: number): PageOverlay | null {
+		const view = this.scrollEl?.getBoundingClientRect();
+		if (!view || x < view.left || x > view.right || y < view.top || y > view.bottom) return null;
+		for (const p of this.pageEls) {
+			const rect = p.container.getBoundingClientRect();
+			if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return this.ensureOverlay(p.page);
+		}
+		return null;
+	}
+
 	private attachOverlayEvents(overlay: PageOverlay): void {
 		const svg = overlay.svg;
 		svg.addEventListener("pointerdown", (evt) => {
+			if (evt.button === 0) {
+				this.pasteTarget = overlay.annotationIdAt(evt.target) ? null : { page: overlay.page, point: overlay.toPdfPoint(evt) };
+			}
 			this.activeTool?.onPointerDown(evt, overlay, this.toolCtx);
 		});
 		svg.addEventListener("pointermove", (evt) => {
@@ -484,7 +523,11 @@ export class PDFAnnotatorView extends FileView {
 			this.activeTool?.onPointerUp(evt, overlay, this.toolCtx);
 		});
 		svg.addEventListener("pointercancel", (evt) => {
-			this.activeTool?.onPointerUp(evt, overlay, this.toolCtx);
+			if (this.activeTool?.onPointerCancel) this.activeTool.onPointerCancel(evt, overlay, this.toolCtx);
+			else this.activeTool?.onPointerUp(evt, overlay, this.toolCtx);
+		});
+		svg.addEventListener("lostpointercapture", (evt) => {
+			this.activeTool?.onPointerCancel?.(evt, overlay, this.toolCtx);
 		});
 	}
 
@@ -594,7 +637,10 @@ export class PDFAnnotatorView extends FileView {
 		this.registerDomEvent(doc, "keyup", (evt) => {
 			this.pageNavigation?.handleKeyUp(evt.key);
 		}, true);
-		this.registerDomEvent(doc.defaultView!, "blur", () => this.pageNavigation?.stop());
+		this.registerDomEvent(doc.defaultView!, "blur", () => {
+			this.pageNavigation?.stop();
+			this.selectTool.cancelDrag(this.toolCtx);
+		});
 		this.registerDomEvent(doc, "visibilitychange", () => {
 			if (doc.hidden) this.pageNavigation?.stop();
 		});
@@ -678,18 +724,43 @@ export class PDFAnnotatorView extends FileView {
 	}
 
 	// ------------------------------------------------------------------
-	// Image paste
+	// Annotation clipboard and image paste
 	// ------------------------------------------------------------------
 
-	private registerPasteHandler(): void {
-		this.registerDomEvent(this.contentEl.ownerDocument, "paste", (evt: ClipboardEvent) => {
-			// Only when this view is the active leaf and not typing in an editor
-			if (this.app.workspace.getActiveViewOfType(PDFAnnotatorView) !== this)
-				return;
-			const target = evt.target as HTMLElement | null;
-			if (target?.isContentEditable || target?.closest("input, textarea, select")) return;
+	private ownsClipboardEvent(evt: ClipboardEvent): boolean {
+		if (evt.defaultPrevented || !this.noteFile || this.app.workspace.getActiveViewOfType(PDFAnnotatorView) !== this) return false;
+		const target = evt.target as HTMLElement | null;
+		if (target?.isContentEditable || target?.closest?.("input, textarea, select, [contenteditable], .modal-container")) return false;
+		return !!target && this.contentEl.contains(target);
+	}
 
-			const items = evt.clipboardData?.items;
+	private registerClipboardHandlers(): void {
+		const doc = this.contentEl.ownerDocument;
+		for (const type of ["copy", "cut"] as const) {
+			this.registerDomEvent(doc, type, (evt: ClipboardEvent) => {
+				if (!this.ownsClipboardEvent(evt) || !evt.clipboardData || this.activeTool !== this.selectTool) return;
+				const items = this.selectTool.copy(this.toolCtx);
+				if (!writeAnnotations(evt.clipboardData, items)) return;
+				evt.preventDefault();
+				evt.stopPropagation();
+				if (type === "cut") this.selectTool.deleteSelection(this.toolCtx);
+			});
+		}
+		this.registerDomEvent(doc, "paste", (evt: ClipboardEvent) => {
+			if (!this.ownsClipboardEvent(evt) || !evt.clipboardData) return;
+			const annotations = readAnnotations(evt.clipboardData);
+			if (annotations) {
+				evt.preventDefault();
+				evt.stopPropagation();
+				const target = this.pasteTarget;
+				this.setTool("select");
+				if (!this.selectTool.paste(this.toolCtx, annotations, target?.page ?? this.currentPageNum(), target?.point)) {
+					new Notice("PDF Annotator: not enough destination pages. Paste on an earlier page or insert blank pages first.");
+				}
+				return;
+			}
+
+			const items = evt.clipboardData.items;
 			if (!items) return;
 			for (const item of Array.from(items)) {
 				if (item.kind === "file" && item.type.startsWith("image/")) {
@@ -881,6 +952,7 @@ export class PDFAnnotatorView extends FileView {
 	private setZoom(zoom: number): void {
 		if (Math.abs(zoom - this.zoom) < 0.001) return;
 		this.pageNavigation?.stop();
+		this.selectTool.cancelDrag(this.toolCtx);
 
 		// Preserve scroll position proportionally
 		const scrollEl = this.scrollEl;
