@@ -12,6 +12,7 @@ export interface ToolbarCallbacks {
 	onFitWidth(): void;
 	onFitHeight(): void;
 	onOpenNote(): void;
+	onInsertBlankPage(): void;
 }
 
 const PRESET_COLORS = [
@@ -38,6 +39,7 @@ export class Toolbar {
 	private colorSwatches: HTMLButtonElement[] = [];
 	private undoBtn!: HTMLButtonElement;
 	private redoBtn!: HTMLButtonElement;
+	private insertBlankPageBtn!: HTMLButtonElement;
 	private zoomLabel!: HTMLElement;
 	private activeTool: ToolId;
 
@@ -180,9 +182,17 @@ export class Toolbar {
 
 		// --- open md note ---
 		this.sep();
+		this.insertBlankPageBtn = this.toolBtn("file-plus", "Insert blank page after current page", () =>
+			this.cb.onInsertBlankPage()
+		);
+		this.setInsertBlankPageEnabled(false);
 		this.toolBtn("file-text", "Open annotation note", () =>
 			this.cb.onOpenNote()
 		);
+	}
+
+	setInsertBlankPageEnabled(enabled: boolean): void {
+		this.insertBlankPageBtn.disabled = !enabled;
 	}
 
 	private pickColor(color: string): void {

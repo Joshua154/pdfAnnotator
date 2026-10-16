@@ -12,11 +12,13 @@ import {
 	AnnotationDocument,
 	ImageAnnotation,
 	createEmptyDocument,
+	createBlankPage,
+	documentPageOrder,
 	generateId,
 	getOrCreatePage,
 } from "./annotations/model";
 import { AnnotationStore } from "./annotations/store";
-import { AddCommand, History } from "./history";
+import { AddCommand, History, InsertBlankPageCommand } from "./history";
 import type PdfAnnotatorPlugin from "./main";
 import { PageOverlay, setImageSrcResolver } from "./overlay";
 import { loadPdfDocument, renderPage } from "./pdf-renderer";
@@ -37,6 +39,8 @@ export const VIEW_TYPE_PDF_ANNOTATOR = "pdf-annotator";
 const ZOOM_LEVELS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 
 interface PageEl {
+	/** Stable annotation key: positive PDF number or negative blank-page ID. */
+	page: number;
 	container: HTMLElement;
 	canvas: HTMLCanvasElement;
 	textLayer: HTMLElement;
@@ -105,7 +109,7 @@ export class PDFAnnotatorView extends FileView {
 			requestRender: (page) => this.renderOverlay(page),
 			requestSave: () => this.scheduleSave(),
 			getPageContainer: (page) =>
-				this.pageEls[page - 1]?.container ?? null,
+				this.pageEls.find((p) => p.page === page)?.container ?? null,
 			getZoom: () => this.zoom,
 		};
 
@@ -128,7 +132,8 @@ export class PDFAnnotatorView extends FileView {
 		];
 		for (const t of toolList) this.tools.set(t.id, t);
 
-		this.history.onChange = (page) => {
+		this.history.onChange = (page, layoutChanged) => {
+			if (layoutChanged) this.syncBlankPages();
 			this.renderOverlay(page);
 			this.toolbar?.setUndoRedoState(
 				this.history.canUndo,
@@ -181,9 +186,11 @@ export class PDFAnnotatorView extends FileView {
 		this.annDoc.pdfPath = loaded.pdfPath;
 		this.annDoc.pages.clear();
 		for (const [k, v] of loaded.pages) this.annDoc.pages.set(k, v);
+		this.annDoc.blankPages = loaded.blankPages;
 		this.history.clear();
 
 		await this.buildPages();
+		this.toolbar?.setInsertBlankPageEnabled(true);
 		this.setTool(this.plugin.settings.defaultTool);
 	}
 
@@ -255,6 +262,7 @@ export class PDFAnnotatorView extends FileView {
 			onFitWidth: () => this.fitWidth(),
 			onFitHeight: () => this.fitHeight(),
 			onOpenNote: () => this.openNote(),
+			onInsertBlankPage: () => this.insertBlankPage(),
 		}, this.plugin.settings.defaultTool);
 
 		this.scrollEl = root.createDiv({ cls: "pdf-annotator-scroll" });
@@ -279,7 +287,7 @@ export class PDFAnnotatorView extends FileView {
 						(p) => p.container === entry.target
 					);
 					if (idx >= 0 && !this.pageEls[idx].rendered) {
-						this.enqueueRender(idx + 1);
+						this.enqueueRender(this.pageEls[idx].page);
 					}
 				}
 			},
@@ -296,6 +304,7 @@ export class PDFAnnotatorView extends FileView {
 				cls: "pdf-annotator-textlayer",
 			});
 			const pageEl: PageEl = {
+				page: i,
 				container,
 				canvas,
 				textLayer,
@@ -315,10 +324,66 @@ export class PDFAnnotatorView extends FileView {
 
 			this.intersectionObserver.observe(container);
 		}
+		this.syncBlankPages();
 
 		// Render the first pages immediately
 		this.enqueueRender(1);
 		if (numPages > 1) this.enqueueRender(2);
+	}
+
+	private insertBlankPage(): void {
+		if (!this.pdfDoc || !this.noteFile) return;
+		const currentPage = this.currentPageNum();
+		const current = this.pageEls.find((p) => p.page === currentPage);
+		if (!current) return;
+		const tool = this.activeTool?.id ?? "pen";
+		this.deactivateTools(); // Commit text edits before changing the page layout.
+		const blank = createBlankPage(this.annDoc, current.page, current.pdfWidth, current.pdfHeight);
+		this.history.execute(this.annDoc, new InsertBlankPageCommand(this.annDoc, blank, current.page));
+		this.setTool(tool === "text-highlight" ? "pen" : tool);
+		this.scheduleSave();
+		this.jumpToPage(blank.page);
+		this.scrollEl?.focus({ preventScroll: true });
+	}
+
+	/** Reconcile inserted paper without replacing PDF canvases or their overlays. */
+	private syncBlankPages(): void {
+		if (!this.pdfDoc || !this.scrollEl) return;
+		this.pageNavigation?.stop();
+		const order = documentPageOrder(this.annDoc, this.pdfDoc.numPages);
+		const existing = new Map(this.pageEls.map((p) => [p.page, p]));
+		for (const p of this.pageEls) {
+			if (order.includes(p.page)) continue;
+			this.intersectionObserver?.unobserve(p.container);
+			p.overlay?.destroy();
+			p.container.remove();
+		}
+		for (const blank of this.annDoc.blankPages) {
+			if (existing.has(blank.page) || !order.includes(blank.page)) continue;
+			const container = this.scrollEl.createDiv({ cls: "pdf-annotator-page mode-draw" });
+			container.setAttribute("aria-label", `Blank annotation page after PDF page ${blank.afterPage}`);
+			const p: PageEl = {
+				page: blank.page,
+				container,
+				canvas: container.createEl("canvas"),
+				textLayer: container.createDiv({ cls: "pdf-annotator-textlayer" }),
+				overlay: new PageOverlay(container, blank.page, blank.width, blank.height),
+				rendered: true,
+				pdfWidth: blank.width,
+				pdfHeight: blank.height,
+			};
+			p.canvas.style.display = "none";
+			this.applyPageSize(p);
+			this.attachOverlayEvents(p.overlay!);
+			this.applyToolClasses(p);
+			existing.set(blank.page, p);
+		}
+		this.pageEls = order.map((page) => existing.get(page)!);
+		for (const [index, p] of this.pageEls.entries()) {
+			const child = this.scrollEl.children[index] ?? null;
+			if (child !== p.container) this.scrollEl.insertBefore(p.container, child);
+			if (p.page < 0) this.renderOverlay(p.page);
+		}
 	}
 
 	private applyPageSize(p: PageEl): void {
@@ -330,16 +395,25 @@ export class PDFAnnotatorView extends FileView {
 	}
 
 	private enqueueRender(pageNum: number): void {
+		const page = this.pageEls.find((p) => p.page === pageNum);
 		this.renderQueue = this.renderQueue
-			.then(() => this.renderPdfPage(pageNum))
+			.then(() => {
+				if (page && this.pageEls.includes(page)) return this.renderPdfPage(pageNum);
+			})
 			.catch((e) =>
 				console.error(`PDF Annotator: render page ${pageNum}`, e)
 			);
 	}
 
 	private async renderPdfPage(pageNum: number): Promise<void> {
-		const p = this.pageEls[pageNum - 1];
+		const p = this.pageEls.find((p) => p.page === pageNum);
 		if (!p || !this.pdfDoc) return;
+		if (pageNum < 0) {
+			this.applyPageSize(p);
+			p.rendered = true;
+			this.renderOverlay(pageNum);
+			return;
+		}
 
 		const info = await renderPage(
 			this.pdfDoc,
@@ -348,6 +422,7 @@ export class PDFAnnotatorView extends FileView {
 			p.textLayer,
 			this.zoom
 		);
+		if (!this.pageEls.includes(p)) return;
 		p.pdfWidth = info.pdfWidth;
 		p.pdfHeight = info.pdfHeight;
 		p.rendered = true;
@@ -371,7 +446,7 @@ export class PDFAnnotatorView extends FileView {
 	}
 
 	private renderOverlay(pageNum: number): void {
-		const p = this.pageEls[pageNum - 1];
+		const p = this.pageEls.find((p) => p.page === pageNum);
 		if (!p?.overlay) return;
 		const items = this.annDoc.pages.get(pageNum)?.items ?? [];
 		p.overlay.renderItems(items);
@@ -553,7 +628,7 @@ export class PDFAnnotatorView extends FileView {
 		}
 
 		const pageNum = this.currentPageNum();
-		const p = this.pageEls[pageNum - 1];
+		const p = this.pageEls.find((p) => p.page === pageNum);
 		if (!p) return;
 
 		// Save to the configured image folder with a unique filename.
@@ -620,7 +695,7 @@ export class PDFAnnotatorView extends FileView {
 	// Page navigation
 	// ------------------------------------------------------------------
 
-	/** 1-based page number closest to the viewport center. */
+	/** Stable annotation key of the page closest to the viewport center. */
 	private currentPageNum(): number {
 		const scrollEl = this.scrollEl;
 		if (!scrollEl || this.pageEls.length === 0) return 1;
@@ -634,7 +709,7 @@ export class PDFAnnotatorView extends FileView {
 			const dist = Math.abs(mid - centerY);
 			if (dist < bestDist) {
 				bestDist = dist;
-				best = i + 1;
+				best = this.pageEls[i].page;
 			}
 		}
 		return best;
@@ -642,7 +717,7 @@ export class PDFAnnotatorView extends FileView {
 
 	/** Snap scroll so the given page starts at the top of the viewport. */
 	private jumpToPage(pageNum: number): void {
-		this.pageNavigation?.jumpToPage(pageNum);
+		this.pageNavigation?.jumpToPage(this.pageEls.findIndex((p) => p.page === pageNum) + 1);
 	}
 
 	// ------------------------------------------------------------------
@@ -650,11 +725,17 @@ export class PDFAnnotatorView extends FileView {
 	// ------------------------------------------------------------------
 
 	private undo(): void {
+		const tool = this.activeTool?.id;
+		this.deactivateTools();
 		if (this.history.undo(this.annDoc)) this.scheduleSave();
+		if (tool) this.setTool(tool);
 	}
 
 	private redo(): void {
+		const tool = this.activeTool?.id;
+		this.deactivateTools();
 		if (this.history.redo(this.annDoc)) this.scheduleSave();
+		if (tool) this.setTool(tool);
 	}
 
 	private scheduleSave(): void {
@@ -687,7 +768,8 @@ export class PDFAnnotatorView extends FileView {
 	/** Zoom so the current page fills the viewport width. */
 	private fitWidth(): void {
 		const scrollEl = this.scrollEl;
-		const p = this.pageEls[this.currentPageNum() - 1];
+		const pageNum = this.currentPageNum();
+		const p = this.pageEls.find((p) => p.page === pageNum);
 		if (!scrollEl || !p) return;
 		const available = scrollEl.clientWidth - 32; // page margins
 		if (available <= 0) return;
@@ -698,7 +780,7 @@ export class PDFAnnotatorView extends FileView {
 	private fitHeight(): void {
 		const scrollEl = this.scrollEl;
 		const pageNum = this.currentPageNum();
-		const p = this.pageEls[pageNum - 1];
+		const p = this.pageEls.find((p) => p.page === pageNum);
 		if (!scrollEl || !p) return;
 		const available = scrollEl.clientHeight - 32;
 		if (available <= 0) return;
@@ -729,7 +811,7 @@ export class PDFAnnotatorView extends FileView {
 			this.applyPageSize(p);
 			if (p.rendered) {
 				p.rendered = false; // allow intersection observer re-render
-				this.enqueueRender(i + 1);
+				this.enqueueRender(p.page);
 			}
 		}
 

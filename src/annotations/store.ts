@@ -2,6 +2,7 @@ import { App, Notice, TFile, normalizePath } from "obsidian";
 import {
 	Annotation,
 	AnnotationDocument,
+	BlankPage,
 	createEmptyDocument,
 	PageAnnotations,
 } from "./model";
@@ -9,7 +10,7 @@ import {
 import { ensureStorageFolder, resolveStorageFolder } from "../storage-paths";
 
 const CODE_FENCE_LANG = "pdf-annotations";
-const FORMAT_VERSION = 1;
+const FORMAT_VERSION = 2;
 
 /**
  * Persistence layer: maps an AnnotationDocument to/from a markdown note.
@@ -205,18 +206,27 @@ export function serializeDocument(
 	lines.push("---");
 	lines.push(`pdf: "[[${pdfFile.path}]]"`);
 	lines.push("plugin: pdf-annotator");
-	lines.push(`version: ${FORMAT_VERSION}`);
+	lines.push(`version: ${doc.blankPages.length ? FORMAT_VERSION : 1}`);
 	lines.push("---");
 	lines.push(`# Annotations for ${pdfFile.name}`);
 	lines.push("");
 
-	const pageNumbers = [...doc.pages.keys()].sort((a, b) => a - b);
+	const anchors = new Set([
+		...[...doc.pages.keys()].filter((p) => p > 0),
+		...doc.blankPages.map((p) => p.afterPage),
+	]);
+	const pageNumbers = [...anchors].sort((a, b) => a - b).flatMap((page) => [
+		page, ...doc.blankPages.filter((p) => p.afterPage === page).map((p) => p.page),
+	]);
 	for (const pageNum of pageNumbers) {
-		const page = doc.pages.get(pageNum)!;
-		if (page.items.length === 0) continue;
+		const blank = doc.blankPages.find((p) => p.page === pageNum);
+		const page = doc.pages.get(pageNum) ?? { page: pageNum, items: [] };
+		if (page.items.length === 0 && !blank) continue;
 
 		lines.push(
-			`## [Page ${pageNum}](${encodeURI(link)}#page=${pageNum})`
+			blank
+				? `## Blank page ${doc.blankPages.filter((p) => p.afterPage === blank.afterPage).indexOf(blank) + 1} after PDF page ${blank.afterPage}`
+				: `## [Page ${pageNum}](${encodeURI(link)}#page=${pageNum})`
 		);
 		lines.push("");
 
@@ -236,6 +246,7 @@ export function serializeDocument(
 		// JSON block — source of truth
 		const payload = {
 			page: pageNum,
+			...(blank ? { blankPage: { afterPage: blank.afterPage, width: blank.width, height: blank.height } } : {}),
 			items: page.items.map(compactAnnotation),
 		};
 		lines.push("```" + CODE_FENCE_LANG);
@@ -267,12 +278,21 @@ export function parseDocument(
 			const payload = JSON.parse(m[1]) as {
 				page: number;
 				items: Annotation[];
+				blankPage?: Omit<BlankPage, "page">;
 			};
 			if (
-				typeof payload.page !== "number" ||
+				!Number.isSafeInteger(payload.page) || payload.page === 0 ||
 				!Array.isArray(payload.items)
 			)
 				continue;
+			if (payload.page < 0) {
+				const blank = payload.blankPage;
+				if (!blank || !Number.isSafeInteger(blank.afterPage) || blank.afterPage < 1 ||
+					!Number.isFinite(blank.width) || blank.width <= 0 ||
+					!Number.isFinite(blank.height) || blank.height <= 0 ||
+					doc.blankPages.some((p) => p.page === payload.page)) continue;
+				doc.blankPages.push({ page: payload.page, afterPage: blank.afterPage, width: blank.width, height: blank.height });
+			}
 			const page: PageAnnotations = {
 				page: payload.page,
 				items: payload.items.filter(isValidAnnotation),

@@ -92,8 +92,17 @@ export type Annotation =
 
 /** All annotations for a single page. */
 export interface PageAnnotations {
-	page: number; // 1-based
+	page: number; // Positive PDF page number, or a negative blank-page ID.
 	items: Annotation[];
+}
+
+/** Extra annotation paper, stored in the note rather than the source PDF. */
+export interface BlankPage {
+	page: number;
+	/** Original PDF page number; array order determines order at this anchor. */
+	afterPage: number;
+	width: number;
+	height: number;
 }
 
 /** Full document model. */
@@ -101,6 +110,7 @@ export interface AnnotationDocument {
 	/** Vault path of the annotated PDF. */
 	pdfPath: string;
 	pages: Map<number, PageAnnotations>;
+	blankPages: BlankPage[];
 }
 
 let idCounter = 0;
@@ -114,7 +124,27 @@ export function generateId(): string {
 }
 
 export function createEmptyDocument(pdfPath: string): AnnotationDocument {
-	return { pdfPath, pages: new Map() };
+	return { pdfPath, pages: new Map(), blankPages: [] };
+}
+
+/** Stable IDs keep existing annotations and PDF links intact when inserting paper. */
+export function createBlankPage(doc: AnnotationDocument, after: number, width: number, height: number): BlankPage {
+	const anchor = doc.blankPages.find((p) => p.page === after);
+	return {
+		page: Math.min(0, ...doc.blankPages.map((p) => p.page), ...doc.pages.keys()) - 1,
+		afterPage: anchor?.afterPage ?? after,
+		width,
+		height,
+	};
+}
+
+export function documentPageOrder(doc: AnnotationDocument, pdfPageCount: number): number[] {
+	const order: number[] = [];
+	for (let page = 1; page <= pdfPageCount; page++) {
+		order.push(page);
+		order.push(...doc.blankPages.filter((p) => p.afterPage === page).map((p) => p.page));
+	}
+	return order;
 }
 
 export function getOrCreatePage(
