@@ -12,6 +12,7 @@ export interface ToolbarCallbacks {
 	onFitWidth(): void;
 	onFitHeight(): void;
 	onOpenNote(): void;
+	onExportPdf(): void;
 	onInsertBlankPage(): void;
 	onInsertRich(type: RichAnnotationType): void;
 }
@@ -42,6 +43,7 @@ export class Toolbar {
 	private redoBtn!: HTMLButtonElement;
 	private insertBlankPageBtn!: HTMLButtonElement;
 	private insertRichBtn!: HTMLButtonElement;
+	private exportBtn!: HTMLButtonElement;
 	private zoomLabel!: HTMLElement;
 	private activeTool: ToolId;
 
@@ -203,6 +205,12 @@ export class Toolbar {
 		this.toolBtn("file-text", "Open annotation note", () =>
 			this.cb.onOpenNote()
 		);
+		this.exportBtn = this.toolBtn("file-down", "Export annotated PDF", () => this.cb.onExportPdf());
+		this.setExportEnabled(false);
+	}
+
+	setExportEnabled(enabled: boolean): void {
+		this.exportBtn.disabled = !enabled;
 	}
 
 	setInsertBlankPageEnabled(enabled: boolean): void {

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add annotated PDF export from the toolbar and command palette, preserving source PDF content and including inserted blank pages. Export creates a separate file beside the source with collision-free filenames, progress reporting, and cancellation on view close.
 - Fix touch scrolling in Select and add two-finger panning and PDF pinch zoom, keeping the zoom centered under the gesture and refreshing nearby pages after release.
 - Cancel unfinished drawing, erasing, and annotation dragging when a second finger starts navigation; prevent canceled gestures from saving accidental annotations.
 

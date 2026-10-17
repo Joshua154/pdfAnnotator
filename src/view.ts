@@ -20,6 +20,7 @@ import {
 	RichAnnotation,
 	RichAnnotationType,
 	findAnnotation,
+	cloneAnnotation,
 } from "./annotations/model";
 import { AnnotationStore } from "./annotations/store";
 import { readAnnotations, writeAnnotations } from "./annotation-clipboard";
@@ -27,6 +28,8 @@ import { AddCommand, History, InsertBlankPageCommand, UpdateCommand } from "./hi
 import type PdfAnnotatorPlugin from "./main";
 import { PageOverlay, setImageSrcResolver } from "./overlay";
 import { loadPdfDocument, renderPage } from "./pdf-renderer";
+import { ExportViewport, annotatedPdfPath, exportAnnotatedPdf } from "./pdf-export";
+import { createExportRasterizer } from "./pdf-export-renderer";
 import { Toolbar } from "./toolbar";
 import { pastedImagePath } from "./storage-paths";
 import { PageNavigation } from "./page-navigation";
@@ -87,6 +90,7 @@ export class PDFAnnotatorView extends FileView {
 	private textHighlightTool: TextHighlightTool;
 	private insertionModal: Modal | null = null;
 	private pasteTarget: { page: number; point: [number, number] } | null = null;
+	private exportController: AbortController | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: PdfAnnotatorPlugin) {
 		super(leaf);
@@ -218,10 +222,12 @@ export class PDFAnnotatorView extends FileView {
 
 		await this.buildPages();
 		this.toolbar?.setInsertBlankPageEnabled(true);
+		this.toolbar?.setExportEnabled(true);
 		this.setTool(this.plugin.settings.defaultTool);
 	}
 
 	async onUnloadFile(file: TFile): Promise<void> {
+		this.exportController?.abort();
 		this.pageNavigation?.stop();
 		this.deactivateTools();
 		// Flush pending changes
@@ -232,6 +238,7 @@ export class PDFAnnotatorView extends FileView {
 	}
 
 	async onClose(): Promise<void> {
+		this.exportController?.abort();
 		this.deactivateTools();
 		if (this.noteFile && this.file) {
 			await this.store.saveNow(this.annDoc, this.noteFile, this.file);
@@ -249,6 +256,8 @@ export class PDFAnnotatorView extends FileView {
 	}
 
 	private teardown(): void {
+		this.exportController?.abort();
+		this.exportController = null;
 		this.deactivateTools();
 		this.touchNavigation?.destroy();
 		this.touchNavigation = null;
@@ -298,6 +307,7 @@ export class PDFAnnotatorView extends FileView {
 			onFitWidth: () => this.fitWidth(),
 			onFitHeight: () => this.fitHeight(),
 			onOpenNote: () => this.openNote(),
+			onExportPdf: () => { void this.exportPdf(); },
 			onInsertBlankPage: () => this.insertBlankPage(),
 			onInsertRich: (type) => this.insertRich(type),
 		}, this.plugin.settings.defaultTool);
@@ -945,6 +955,64 @@ export class PDFAnnotatorView extends FileView {
 			await this.store.saveNow(this.annDoc, this.noteFile, this.file);
 		}
 		await this.app.workspace.getLeaf("split").openFile(this.noteFile);
+	}
+
+	canExportPdf(): boolean {
+		return !!this.pdfDoc && !!this.file && !!this.noteFile && !this.exportController;
+	}
+
+	async exportPdf(): Promise<void> {
+		const file = this.file, pdfDoc = this.pdfDoc, note = this.noteFile;
+		if (!file || !pdfDoc || !note || this.exportController) return;
+		const controller = new AbortController();
+		this.exportController = controller;
+		this.toolbar?.setExportEnabled(false);
+		const progress = new Notice("Exporting annotated PDF…", 0);
+		try {
+			// Commit the active text editor and cancel unfinished gestures before
+			// taking a snapshot; editing can continue while that snapshot exports.
+			const tool = this.activeTool?.id;
+			this.deactivateTools();
+			if (tool) this.setTool(tool);
+			const snapshot: AnnotationDocument = {
+				pdfPath: this.annDoc.pdfPath,
+				blankPages: this.annDoc.blankPages.map(p => ({ ...p })),
+				pages: new Map(Array.from(this.annDoc.pages, ([id, page]) => [id, {
+					page: page.page, items: page.items.map(ann => cloneAnnotation(ann)),
+				}])),
+			};
+			const sourcePath = file.path;
+			const sourceNotePath = note.path;
+			const viewports = new Map<number, ExportViewport>();
+			for (let page = 1; page <= pdfDoc.numPages; page++) {
+				controller.signal.throwIfAborted();
+				const viewport = (await pdfDoc.getPage(page)).getViewport({ scale: 1 });
+				viewports.set(page, { width: viewport.width, height: viewport.height, transform: [...viewport.transform] });
+			}
+			await this.store.saveNow(this.annDoc, note, file);
+			controller.signal.throwIfAborted();
+			const source = await this.app.vault.readBinary(file);
+			const bytes = await exportAnnotatedPdf(source, snapshot, {
+				viewports, signal: controller.signal,
+				rasterize: createExportRasterizer(this.app, this.contentEl.ownerDocument, sourceNotePath, controller.signal),
+				onProgress: (done, total) => progress.setMessage(`Exporting annotated PDF… ${done}/${total} pages`),
+			});
+			controller.signal.throwIfAborted();
+			const destination = annotatedPdfPath(sourcePath, path => !!this.app.vault.getAbstractFileByPath(path));
+			await this.app.vault.createBinary(destination, new Uint8Array(bytes).buffer);
+			new Notice(`Exported annotated PDF: ${destination}`);
+		} catch (error) {
+			if (!controller.signal.aborted) {
+				console.error("PDF Annotator: PDF export failed", error);
+				new Notice(`PDF export failed: ${error instanceof Error ? error.message : String(error)}`);
+			}
+		} finally {
+			progress.hide();
+			if (this.exportController === controller) {
+				this.exportController = null;
+				this.toolbar?.setExportEnabled(this.canExportPdf());
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------

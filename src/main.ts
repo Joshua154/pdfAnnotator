@@ -31,6 +31,17 @@ export default class PdfAnnotatorPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "export-annotated-pdf",
+			name: "Export annotated PDF",
+			checkCallback: (checking) => {
+				const view = this.app.workspace.getActiveViewOfType(PDFAnnotatorView);
+				if (!view?.canExportPdf()) return false;
+				if (!checking) void view.exportPdf();
+				return true;
+			},
+		});
+
 		// File menu: right-click a PDF → "Annotate PDF"
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu: Menu, file) => {

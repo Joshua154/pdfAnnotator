@@ -14,6 +14,7 @@ Draw, highlight, and add text, shapes, and images to PDFs in Obsidian. Annotatio
 - Insert blank pages for extra annotation space, with undo and redo.
 - Autosave to one Markdown note per PDF, with page links and annotation data.
 - Store notes and images in vault folders or relative to each PDF, using path templates.
+- Export a separate PDF with visible annotations and inserted blank pages.
 
 ## Installation
 
@@ -61,6 +62,14 @@ Sources, drawing paths, and positions are saved in the annotation note and resto
 ### Blank pages
 
 Use **Insert blank page after current page** (the file-plus toolbar button) to add annotation space after the page you are viewing. The new page matches its size and supports drawing, text, shapes, and pasted images. You can insert several blank pages, including after another blank page, and undo or redo insertion. Blank pages, including empty ones, are saved in the annotation note and restored when you reopen the PDF in the annotator. They do not change the original PDF or its page links and do not appear in other PDF readers.
+
+### Annotated PDF export
+
+Click **Export annotated PDF** (the file-down toolbar button), or run **PDF Annotator: Export annotated PDF** while an annotator pane is active. The plugin saves a separate file beside the source: `Lecture.pdf` becomes `Lecture.annotated.pdf`. Repeated exports receive numeric suffixes, preserving previous exports.
+
+The exported copy includes all PDF pages and inserted blank pages in viewer order, including empty blank pages. It preserves the original PDF's searchable text and graphics. Plugin annotations are flattened into the copy so they display in other PDF readers: drawings and highlights remain vector graphics; text boxes, images, LaTeX, TikZ, and Excalidraw previews are embedded as images at up to 144 dpi. Continue editing annotations in the original annotator and export again when needed.
+
+Active text edits are committed before export. Changes made while export is running are included in the next export. LaTeX and diagram renderers must be available; missing images, failed previews, and unsupported or encrypted PDFs produce an error instead of an incomplete export. Closing the annotator or switching its PDF cancels pending export work. The source PDF and annotation note remain available for editing.
 
 ### Keyboard controls
 
@@ -132,9 +141,9 @@ Annotation templates are evaluated when opening a PDF, and image templates when 
 
 ## Storage and privacy
 
-The plugin reads PDFs and writes annotation notes, image attachments, and plugin settings inside your vault. It makes no network requests, collects no telemetry, requires no account or payment, and does not access files outside the vault. Obsidian's own sync services may sync these files if enabled.
+The plugin reads PDFs and writes annotation notes, image attachments, exported PDFs, and plugin settings inside your vault. It makes no network requests, collects no telemetry, requires no account or payment, and does not access files outside the vault. Obsidian's own sync services may sync these files if enabled.
 
-Annotation notes contain readable text summaries, links to PDF pages, and `pdf-annotations` fenced JSON blocks that store the drawings and positions. Keep those blocks intact to preserve annotations. Other PDF readers will not display these overlays because the annotations are not embedded in the PDF. Removing an image annotation does not delete its image attachment.
+Annotation notes contain readable text summaries, links to PDF pages, and `pdf-annotations` fenced JSON blocks that store the drawings and positions. Keep those blocks intact to preserve annotations. Other PDF readers display these overlays only in an exported annotated copy. Removing an image annotation does not delete its image attachment.
 
 Moving or renaming PDFs or annotation notes does not automatically migrate their stored association. Keep backups and reopen the original storage location if a changed path appears to have no annotations. Simultaneous editing of the same PDF in multiple panes is not coordinated.
 
@@ -164,4 +173,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks and [RELEASING.md]
 
 ## License
 
-[MIT](LICENSE), copyright Joshua. PDF rendering uses the [PDF.js](https://github.com/mozilla/pdf.js) library bundled with Obsidian. The `pdfjs-dist` development dependency provides types and is not bundled into this plugin.
+[MIT](LICENSE), copyright Joshua. PDF rendering uses the [PDF.js](https://github.com/mozilla/pdf.js) library bundled with Obsidian. The `pdfjs-dist` development dependency provides types and is not bundled into this plugin. Export uses the bundled [pdf-lib](https://pdf-lib.js.org/) library.
