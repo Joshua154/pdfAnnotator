@@ -15,7 +15,7 @@ const MIN_DIST = 0.7;
 export class PenTool implements Tool {
 	readonly id: ToolId = "pen";
 
-	private drawing = false;
+	private pointerId: number | null = null;
 	private activeOverlay: PageOverlay | null = null;
 	private points: [number, number][] = [];
 	private previewPath: SVGPathElement | null = null;
@@ -37,14 +37,14 @@ export class PenTool implements Tool {
 		overlay: PageOverlay,
 		ctx: ToolContext
 	): void {
-		if (evt.button !== 0) return;
+		if (evt.button !== 0 || this.pointerId !== null) return;
 		evt.preventDefault();
-		this.drawing = true;
+		this.pointerId = evt.pointerId;
 		this.activeOverlay = overlay;
 		this.points = [overlay.toPdfPoint(evt)];
 
 		const style = this.getStyle(ctx);
-		const path = document.createElementNS(SVG_NS, "path");
+		const path = overlay.svg.ownerDocument.createElementNS(SVG_NS, "path");
 		path.setAttribute("fill", "none");
 		path.setAttribute("stroke", style.color);
 		path.setAttribute("stroke-width", String(style.width));
@@ -61,7 +61,7 @@ export class PenTool implements Tool {
 	}
 
 	onPointerMove(evt: PointerEvent, overlay: PageOverlay): void {
-		if (!this.drawing || overlay !== this.activeOverlay) return;
+		if (evt.pointerId !== this.pointerId || overlay !== this.activeOverlay) return;
 		evt.preventDefault();
 		const pt = overlay.toPdfPoint(evt);
 		const last = this.points[this.points.length - 1];
@@ -75,10 +75,8 @@ export class PenTool implements Tool {
 		overlay: PageOverlay,
 		ctx: ToolContext
 	): void {
-		if (!this.drawing || overlay !== this.activeOverlay) return;
-		this.drawing = false;
-		overlay.clearDraft();
-		this.previewPath = null;
+		if (evt.pointerId !== this.pointerId || overlay !== this.activeOverlay) return;
+		this.onPointerMove(evt, overlay);
 
 		if (this.points.length === 0) return;
 		const style = this.getStyle(ctx);
@@ -90,8 +88,22 @@ export class PenTool implements Tool {
 			opacity: style.opacity,
 			points: this.points,
 		};
-		this.points = [];
+		this.onDeactivate();
 		ctx.history.execute(ctx.doc, new AddCommand(overlay.page, ann));
 		ctx.requestSave();
+	}
+
+	onPointerCancel(evt: PointerEvent): void {
+		if (evt.pointerId === this.pointerId) this.onDeactivate();
+	}
+
+	onDeactivate(): void {
+		const overlay = this.activeOverlay, id = this.pointerId;
+		this.pointerId = null;
+		this.activeOverlay = null;
+		this.points = [];
+		this.previewPath = null;
+		overlay?.clearDraft();
+		if (id !== null && overlay?.svg.hasPointerCapture(id)) overlay.svg.releasePointerCapture(id);
 	}
 }

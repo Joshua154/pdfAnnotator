@@ -21,6 +21,7 @@ export class TextBoxTool implements Tool {
 	private editor: HTMLDivElement | null = null;
 	private editingExisting: TextAnnotation | null = null;
 	private editingPage = 0;
+	private touch: { evt: PointerEvent; overlay: PageOverlay } | null = null;
 
 	onPointerDown(
 		evt: PointerEvent,
@@ -28,6 +29,18 @@ export class TextBoxTool implements Tool {
 		ctx: ToolContext
 	): void {
 		if (evt.button !== 0) return;
+		// Wait for a touch tap to finish: a second finger may be starting a pinch.
+		if (evt.pointerType === "touch") {
+			if (this.touch) return;
+			evt.preventDefault();
+			this.touch = { evt, overlay };
+			overlay.svg.setPointerCapture(evt.pointerId);
+			return;
+		}
+		this.placeEditor(evt, overlay, ctx);
+	}
+
+	private placeEditor(evt: PointerEvent, overlay: PageOverlay, ctx: ToolContext): void {
 		// Commit any open editor first
 		if (this.editor) {
 			this.commit(ctx);
@@ -63,11 +76,27 @@ export class TextBoxTool implements Tool {
 	onPointerMove(): void {
 		/* no-op */
 	}
-	onPointerUp(): void {
-		/* no-op */
+	onPointerUp(evt: PointerEvent, overlay: PageOverlay, ctx: ToolContext): void {
+		const touch = this.touch;
+		if (!touch || evt.pointerId !== touch.evt.pointerId) return;
+		this.cancelTouch();
+		if (Math.hypot(evt.clientX - touch.evt.clientX, evt.clientY - touch.evt.clientY) <= 8) {
+			this.placeEditor(touch.evt, overlay, ctx);
+		}
+	}
+
+	onPointerCancel(evt: PointerEvent): void {
+		if (evt.pointerId === this.touch?.evt.pointerId) this.cancelTouch();
+	}
+
+	private cancelTouch(): void {
+		const touch = this.touch;
+		this.touch = null;
+		if (touch?.overlay.svg.hasPointerCapture(touch.evt.pointerId)) touch.overlay.svg.releasePointerCapture(touch.evt.pointerId);
 	}
 
 	onDeactivate(ctx: ToolContext): void {
+		this.cancelTouch();
 		if (this.editor) this.commit(ctx);
 	}
 

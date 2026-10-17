@@ -30,6 +30,7 @@ import { loadPdfDocument, renderPage } from "./pdf-renderer";
 import { Toolbar } from "./toolbar";
 import { pastedImagePath } from "./storage-paths";
 import { PageNavigation } from "./page-navigation";
+import { TouchNavigation, TouchPoint } from "./touch-navigation";
 import { ExcalidrawPicker, SourceModal } from "./insert-modal";
 import { mountRichContent } from "./rich-content";
 import { EraserTool } from "./tools/eraser";
@@ -43,7 +44,7 @@ import { Tool, ToolContext, ToolId, ToolOptions } from "./tools/tool";
 
 export const VIEW_TYPE_PDF_ANNOTATOR = "pdf-annotator";
 
-const ZOOM_LEVELS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+const ZOOM_LEVELS = [0.25, 0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
 
 interface PageEl {
 	/** Stable annotation key: positive PDF number or negative blank-page ID. */
@@ -53,6 +54,7 @@ interface PageEl {
 	textLayer: HTMLElement;
 	overlay: PageOverlay | null;
 	rendered: boolean;
+	renderedZoom?: number;
 	pdfWidth: number;
 	pdfHeight: number;
 }
@@ -69,6 +71,9 @@ export class PDFAnnotatorView extends FileView {
 	private toolbar: Toolbar | null = null;
 	private scrollEl: HTMLElement | null = null;
 	private pageNavigation: PageNavigation | null = null;
+	private touchNavigation: TouchNavigation | null = null;
+	private touchZoomDirty = false;
+	private queuedPages = new Set<PageEl>();
 	private pageEls: PageEl[] = [];
 	private zoom = 1;
 	private renderQueue = Promise.resolve();
@@ -235,6 +240,7 @@ export class PDFAnnotatorView extends FileView {
 	}
 
 	private deactivateTools(): void {
+		this.touchNavigation?.reset();
 		this.insertionModal?.close();
 		this.insertionModal = null;
 		// Select can also open the text editor, so deactivate every tool.
@@ -244,6 +250,10 @@ export class PDFAnnotatorView extends FileView {
 
 	private teardown(): void {
 		this.deactivateTools();
+		this.touchNavigation?.destroy();
+		this.touchNavigation = null;
+		this.touchZoomDirty = false;
+		this.queuedPages.clear();
 		this.store.cancelPendingSave();
 		this.pageNavigation?.stop();
 		this.pageNavigation = null;
@@ -273,6 +283,7 @@ export class PDFAnnotatorView extends FileView {
 
 	private async buildUi(): Promise<void> {
 		this.pageNavigation?.stop();
+		this.touchNavigation?.destroy();
 		const root = this.contentEl;
 		root.empty();
 		root.addClass("pdf-annotator-container");
@@ -301,6 +312,20 @@ export class PDFAnnotatorView extends FileView {
 			this.scrollEl,
 			() => this.pageEls.map((page) => page.container)
 		);
+		this.touchNavigation = new TouchNavigation(this.scrollEl, {
+			shouldPan: (evt) => {
+				const target = evt.target as Element;
+				return this.activeTool?.id === "select" && !!target.closest(".pdf-annotator-overlay") &&
+					!target.closest(".pdfann-item, .pdfann-resize-handle");
+			},
+			cancelTool: (evt) => {
+				const svg = (evt.target as Element | null)?.closest(".pdf-annotator-overlay");
+				const overlay = this.pageEls.find(p => p.overlay?.svg === svg)?.overlay;
+				if (overlay) this.activeTool?.onPointerCancel?.(evt, overlay, this.toolCtx);
+			},
+			transform: (from, to, scale) => this.transformTouch(from, to, scale),
+			finish: () => this.finishTouchZoom(),
+		});
 	}
 
 	private async buildPages(): Promise<void> {
@@ -421,14 +446,21 @@ export class PDFAnnotatorView extends FileView {
 		const h = Math.floor(p.pdfHeight * this.zoom);
 		p.container.style.width = `${w}px`;
 		p.container.style.height = `${h}px`;
+		// Stretch the existing bitmap during a pinch; render at full resolution on release.
+		p.canvas.style.width = `${w}px`;
+		p.canvas.style.height = `${h}px`;
+		p.textLayer.style.transform = `scale(${this.zoom / (p.renderedZoom ?? this.zoom)})`;
 		p.overlay?.setDisplaySize(w, h);
 	}
 
 	private enqueueRender(pageNum: number): void {
 		const page = this.pageEls.find((p) => p.page === pageNum);
+		if (!page || this.queuedPages.has(page) || this.touchNavigation?.isZooming) return;
+		this.queuedPages.add(page);
 		this.renderQueue = this.renderQueue
 			.then(() => {
-				if (page && this.pageEls.includes(page)) return this.renderPdfPage(pageNum);
+				this.queuedPages.delete(page);
+				if (this.pageEls.includes(page) && !this.touchNavigation?.isZooming) return this.renderPdfPage(pageNum);
 			})
 			.catch((e) =>
 				console.error(`PDF Annotator: render page ${pageNum}`, e)
@@ -445,17 +477,19 @@ export class PDFAnnotatorView extends FileView {
 			return;
 		}
 
+		const renderZoom = this.zoom;
 		const info = await renderPage(
 			this.pdfDoc,
 			pageNum,
 			p.canvas,
 			p.textLayer,
-			this.zoom
+			renderZoom
 		);
 		if (!this.pageEls.includes(p)) return;
 		p.pdfWidth = info.pdfWidth;
 		p.pdfHeight = info.pdfHeight;
-		p.rendered = true;
+		p.rendered = renderZoom === this.zoom;
+		p.renderedZoom = renderZoom;
 		this.applyPageSize(p);
 
 		if (!p.overlay) {
@@ -475,6 +509,7 @@ export class PDFAnnotatorView extends FileView {
 		);
 		this.renderOverlay(pageNum);
 		this.selectTool.refresh(this.toolCtx);
+		if (!p.rendered) this.enqueueRender(p.page);
 	}
 
 	private renderOverlay(pageNum: number): void {
@@ -523,8 +558,7 @@ export class PDFAnnotatorView extends FileView {
 			this.activeTool?.onPointerUp(evt, overlay, this.toolCtx);
 		});
 		svg.addEventListener("pointercancel", (evt) => {
-			if (this.activeTool?.onPointerCancel) this.activeTool.onPointerCancel(evt, overlay, this.toolCtx);
-			else this.activeTool?.onPointerUp(evt, overlay, this.toolCtx);
+			this.activeTool?.onPointerCancel?.(evt, overlay, this.toolCtx);
 		});
 		svg.addEventListener("lostpointercapture", (evt) => {
 			this.activeTool?.onPointerCancel?.(evt, overlay, this.toolCtx);
@@ -541,6 +575,7 @@ export class PDFAnnotatorView extends FileView {
 			this.toolbar?.setActiveTool(toolId);
 			return;
 		}
+		this.touchNavigation?.reset();
 		this.activeTool?.onDeactivate?.(this.toolCtx);
 		this.activeTool = tool;
 		tool.onActivate?.(this.toolCtx);
@@ -916,11 +951,57 @@ export class PDFAnnotatorView extends FileView {
 	// Zoom
 	// ------------------------------------------------------------------
 
+	private transformTouch(from: TouchPoint, to: TouchPoint, scale: number): void {
+		const scroll = this.scrollEl;
+		if (!scroll) return;
+		this.pageNavigation?.stop();
+		this.pasteTarget = null;
+		const zoom = clampZoom(this.zoom * scale);
+		if (Math.abs(zoom - this.zoom) < 0.0001) {
+			scroll.scrollLeft += from.clientX - to.clientX;
+			scroll.scrollTop += from.clientY - to.clientY;
+			return;
+		}
+
+		// Anchor to a page instead of a document-height ratio: margins and page gaps
+		// do not scale, and pages can have different sizes.
+		let anchor: { page: PageEl; x: number; y: number } | null = null;
+		let nearest = Infinity;
+		for (const page of this.pageEls) {
+			const rect = page.container.getBoundingClientRect();
+			const distance = Math.max(rect.top - from.clientY, from.clientY - rect.bottom, 0);
+			if (distance >= nearest || rect.width <= 0 || rect.height <= 0) continue;
+			nearest = distance;
+			anchor = { page, x: (from.clientX - rect.left) / rect.width, y: (from.clientY - rect.top) / rect.height };
+		}
+		if (!anchor) return;
+		this.zoom = zoom;
+		this.touchZoomDirty = true;
+		this.toolbar?.setZoom(zoom);
+		for (const page of this.pageEls) this.applyPageSize(page);
+		const rect = anchor.page.container.getBoundingClientRect();
+		scroll.scrollLeft += rect.left + anchor.x * rect.width - to.clientX;
+		scroll.scrollTop += rect.top + anchor.y * rect.height - to.clientY;
+	}
+
+	private finishTouchZoom(): void {
+		const zoomChanged = this.touchZoomDirty;
+		this.touchZoomDirty = false;
+		const viewport = this.scrollEl?.getBoundingClientRect();
+		for (const page of this.pageEls) {
+			if (page.page < 0) continue;
+			if (zoomChanged) page.rendered = page.renderedZoom === this.zoom;
+			const rect = page.container.getBoundingClientRect();
+			if (!page.rendered && viewport && rect.bottom >= viewport.top - 600 && rect.top <= viewport.bottom + 600) {
+				this.enqueueRender(page.page);
+			}
+		}
+		if (zoomChanged) this.selectTool.refresh(this.toolCtx);
+	}
+
 	private nextZoom(dir: 1 | -1): number {
-		const idx = ZOOM_LEVELS.findIndex((z) => z >= this.zoom - 0.001);
-		const cur = idx < 0 ? ZOOM_LEVELS.length - 1 : idx;
-		const next = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, cur + dir));
-		return ZOOM_LEVELS[next];
+		const levels = dir === 1 ? ZOOM_LEVELS : [...ZOOM_LEVELS].reverse();
+		return levels.find(level => (level - this.zoom) * dir > 0.001) ?? (dir === 1 ? MAX_ZOOM : MIN_ZOOM);
 	}
 
 	/** Zoom so the current page fills the viewport width. */
@@ -951,6 +1032,7 @@ export class PDFAnnotatorView extends FileView {
 
 	private setZoom(zoom: number): void {
 		if (Math.abs(zoom - this.zoom) < 0.001) return;
+		this.touchNavigation?.reset();
 		this.pageNavigation?.stop();
 		this.selectTool.cancelDrag(this.toolCtx);
 

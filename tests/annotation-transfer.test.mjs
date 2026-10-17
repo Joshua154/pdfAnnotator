@@ -397,7 +397,7 @@ test("view hit testing resolves blank and not-yet-rendered PDF overlays from coo
 	globalThis.document = { createElementNS: () => new ElementFixture() };
 	try {
 		const view = Object.create(PDFAnnotatorView.prototype);
-		const page = { page: 5, container: new ElementFixture(), pdfWidth: 200, pdfHeight: 200, overlay: null };
+		const page = { page: 5, container: new ElementFixture(), canvas: new ElementFixture(), textLayer: new ElementFixture(), pdfWidth: 200, pdfHeight: 200, overlay: null };
 		Object.assign(view, { pageEls: [page], zoom: 1.5, scrollEl: new ElementFixture(), annDoc: createEmptyDocument("Lecture.pdf") });
 		const overlay = view.overlayAtPoint(20, 30);
 		assert.equal(overlay.page, 5); assert.equal(page.overlay, overlay); assert.equal(page.rendered, undefined);

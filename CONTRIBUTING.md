@@ -28,6 +28,7 @@ Use disposable PDFs and notes in a test vault:
 - Switch files in the same pane and paste once; exactly one image should appear.
 - Close a text editor or text-highlighting view, disable/re-enable the plugin, and verify there are no orphaned listeners, duplicate pastes, or unsaved edits.
 - Check light/dark themes, different pane sizes, and PDFs with mixed page sizes.
+- On mobile, swipe empty space with Select in both axes and check momentum scrolling. Pinch and pan with two fingers in each tool, including across PDF/blank page boundaries and at zoom limits. Add a second finger during drawing, erasing, and dragging; annotations and undo history must stay unchanged. Lift either finger first, cancel a gesture, background/close the view, and verify a fresh annotation still works. Check text selection and keyboard editing retain their normal behavior.
 - Verify the minimum supported Obsidian release as well as the current stable release.
 - Test mobile and desktop pop-out windows before claiming support; record versions and any limitations in the release notes.
 

@@ -98,6 +98,10 @@
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow: auto;
+	overscroll-behavior: contain;
+	/* Browser scrolling remains available on the text layer and between pages;
+	   the viewer handles PDF pinch zoom instead of zooming the whole app. */
+	touch-action: pan-x pan-y;
 	padding: 16px 0 32px;
 }
 

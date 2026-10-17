@@ -7,7 +7,7 @@ import { Tool, ToolContext, ToolId } from "./tool";
 export class ShapeTool implements Tool {
 	readonly id: ToolId = "shape";
 
-	private drawing = false;
+	private pointerId: number | null = null;
 	private activeOverlay: PageOverlay | null = null;
 	private draft: ShapeAnnotation | null = null;
 
@@ -16,10 +16,10 @@ export class ShapeTool implements Tool {
 		overlay: PageOverlay,
 		ctx: ToolContext
 	): void {
-		if (evt.button !== 0) return;
+		if (evt.button !== 0 || this.pointerId !== null) return;
 		evt.preventDefault();
 		const [x, y] = overlay.toPdfPoint(evt);
-		this.drawing = true;
+		this.pointerId = evt.pointerId;
 		this.activeOverlay = overlay;
 		this.draft = {
 			id: generateId(),
@@ -38,7 +38,7 @@ export class ShapeTool implements Tool {
 	}
 
 	onPointerMove(evt: PointerEvent, overlay: PageOverlay): void {
-		if (!this.drawing || !this.draft || overlay !== this.activeOverlay)
+		if (evt.pointerId !== this.pointerId || !this.draft || overlay !== this.activeOverlay)
 			return;
 		evt.preventDefault();
 		const [x, y] = overlay.toPdfPoint(evt);
@@ -69,16 +69,28 @@ export class ShapeTool implements Tool {
 		overlay: PageOverlay,
 		ctx: ToolContext
 	): void {
-		if (!this.drawing || !this.draft || overlay !== this.activeOverlay)
+		if (evt.pointerId !== this.pointerId || !this.draft || overlay !== this.activeOverlay)
 			return;
-		this.drawing = false;
-		overlay.clearDraft();
+		this.onPointerMove(evt, overlay);
 		const d = this.draft;
-		this.draft = null;
+		this.onDeactivate();
 		// Discard degenerate shapes (click without drag)
 		if (Math.hypot(d.x2 - d.x, d.y2 - d.y) < 2) return;
 		ctx.history.execute(ctx.doc, new AddCommand(overlay.page, d));
 		ctx.requestSave();
+	}
+
+	onPointerCancel(evt: PointerEvent): void {
+		if (evt.pointerId === this.pointerId) this.onDeactivate();
+	}
+
+	onDeactivate(): void {
+		const overlay = this.activeOverlay, id = this.pointerId;
+		this.pointerId = null;
+		this.activeOverlay = null;
+		this.draft = null;
+		overlay?.clearDraft();
+		if (id !== null && overlay?.svg.hasPointerCapture(id)) overlay.svg.releasePointerCapture(id);
 	}
 
 	private renderDraft(overlay: PageOverlay): void {

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fix touch scrolling in Select and add two-finger panning and PDF pinch zoom, keeping the zoom centered under the gesture and refreshing nearby pages after release.
+- Cancel unfinished drawing, erasing, and annotation dragging when a second finger starts navigation; prevent canceled gestures from saving accidental annotations.
+
 ## 0.2.0
 
 - Add blank pages after any PDF or blank page for extra annotation space, with undo/redo. Blank pages are saved in the annotation note and restored when reopening the PDF.

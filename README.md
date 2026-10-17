@@ -36,6 +36,8 @@ Select a tool in the toolbar, then draw or click on a page. For text highlightin
 
 Use **Select** to move or resize an annotation, or select it and press Delete. Click a text annotation twice with Select to edit it. Click outside a text box or press Ctrl/Cmd+Enter to save its text; Escape cancels editing.
 
+On touch screens, swipe empty page space with **Select** to scroll. Use two fingers to pan or pinch to zoom while using any annotation tool. Adding a second finger cancels an unfinished stroke, erase, or annotation drag so navigation does not change annotations. Lift both fingers before starting a new annotation.
+
 Shift-click annotations to add or remove them from a selection, including on other pages. Ctrl/Cmd+A with Select active selects all annotations in the document. Use Ctrl/Cmd+C to copy or Ctrl/Cmd+X to cut, then click empty space on a destination page and press Ctrl/Cmd+V. Without a destination click, paste uses the page currently in view. Pasted annotations receive new IDs; images and drawings keep their existing attachment links.
 
 Drag any selected annotation to move the whole selection to another page. Hold near the top or bottom of the viewer to scroll while dragging, or use the mouse wheel. Selections spanning multiple pages retain their relative page spacing, including blank pages. The destination must have enough pages for the entire selection; insert blank pages first if needed. Each cut, paste, drag, or deletion is one undo step. Escape cancels an in-progress drag, and dropping outside the pages leaves the selection in place. Moving or copying a PDF text highlight detaches its original text-selection link while retaining its quoted text and highlight rectangles.
