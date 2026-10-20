@@ -12,6 +12,7 @@ export interface ToolbarCallbacks {
 	onFitWidth(): void;
 	onFitHeight(): void;
 	onOpenNote(): void;
+	onSearch(): void;
 	onExportPdf(): void;
 	onInsertBlankPage(): void;
 	onInsertRich(type: RichAnnotationType): void;
@@ -82,7 +83,7 @@ export class Toolbar {
 	private build(): void {
 		// --- tools ---
 		const tools: [ToolId, string, string][] = [
-			["select", "mouse-pointer-2", "Select / move / resize (V)"],
+			["select", "mouse-pointer-2", "Select text / move / resize annotations (V)"],
 			["pen", "pen-line", "Pen (P)"],
 			["highlighter", "highlighter", "Highlighter (H)"],
 			["text", "type", "Text box (T)"],
@@ -198,6 +199,7 @@ export class Toolbar {
 
 		// --- open md note ---
 		this.sep();
+		this.toolBtn("search", "Search PDF and notes (Ctrl/Cmd+F)", () => this.cb.onSearch());
 		this.insertBlankPageBtn = this.toolBtn("file-plus", "Insert blank page after current page", () =>
 			this.cb.onInsertBlankPage()
 		);

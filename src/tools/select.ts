@@ -123,10 +123,10 @@ export class SelectTool implements Tool {
 
 	onPointerDown(evt: PointerEvent, overlay: PageOverlay, ctx: ToolContext): void {
 		if (evt.button !== 0 || this.drag) return;
-		evt.preventDefault();
 		const [x, y] = overlay.toPdfPoint(evt);
 		const handle = this.handleAt(evt.target);
 		if (handle && this.selected.length === 1 && this.selected[0].page === overlay.page) {
+			evt.preventDefault();
 			this.beginDrag(evt, overlay, ctx, x, y, handle);
 			return;
 		}
@@ -137,6 +137,7 @@ export class SelectTool implements Tool {
 			if (!evt.shiftKey) this.clearSelection();
 			return;
 		}
+		evt.preventDefault();
 		const index = this.selected.findIndex(s => s.page === overlay.page && s.id === id);
 		if (evt.shiftKey) {
 			if (index >= 0) this.selected.splice(index, 1);

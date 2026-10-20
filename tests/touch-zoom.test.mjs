@@ -70,7 +70,7 @@ test("pinch zoom preserves its moving anchor across mixed PDF and blank page siz
 	view.transformTouch(start, end, 1.4);
 	assert.equal(view.zoom, 1.4);
 	assertSamePoint(pointOnPage(blank, end), point);
-	assert.equal(view.pageEls[0].textLayer.style.transform, "scale(1.4)");
+	assert.equal(view.pageEls[0].textLayer.style.scale, "1.4");
 	assert.equal(blank.canvas.style.width, "1120px");
 	assert.deepEqual(queued, [], "gesture frames stretch existing canvases without starting PDF renders");
 	const beforePan = pointOnPage(blank, end);

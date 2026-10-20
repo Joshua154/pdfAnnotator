@@ -345,7 +345,7 @@ test("moving text highlights detaches stale text links and survives save/reopen 
 
 function viewFixture(f) {
 	const view = Object.create(PDFAnnotatorView.prototype), listeners = new Map();
-	const content = { ownerDocument: {}, contains: target => target?.inView === true };
+	const content = { ownerDocument: { getSelection: () => null }, contains: target => target?.inView === true };
 	Object.assign(view, {
 		contentEl: content, annDoc: f.doc, noteFile: { path: "annotations.md" },
 		app: { workspace: { getActiveViewOfType: () => view } },
@@ -390,6 +390,52 @@ test("clipboard handlers leave editors, modals, other panes, inactive views, and
 	view.app.workspace.getActiveViewOfType = () => ({});
 	assert.equal(dispatch("paste", data).defaultPrevented, false);
 	assert.equal(f.history.canUndo, false);
+});
+
+test("Select allows native PDF text gestures, clears annotations and retains the paste destination", () => {
+	const f = fixture();
+	addAnnotation(f.doc, 1, shape("selected"));
+	f.click(1, "selected");
+	const { view } = viewFixture(f);
+	const container = {};
+	view.pageEls = [{ page: 1, container }];
+	view.ensureOverlay = page => f.overlays.get(page);
+	let prevented = false;
+	const evt = f.event(1, 70, 80, {
+		target: { closest: selector => selector === ".pdf-annotator-page" ? container : null },
+		preventDefault() { prevented = true; },
+	});
+	view.selectBackground(evt);
+	assert.equal(prevented, false, "native selection must receive the uncanceled pointer event");
+	assert.deepEqual(f.tool.copy(f.ctx), [], "text gestures clear the previous annotation selection");
+	assert.deepEqual(view.pasteTarget, { page: 1, point: [70, 80] });
+	assert.equal(f.history.canUndo, false, "selecting text does not create an annotation");
+
+	const hit = f.event(1, 20, 30, { target: { id: "selected" }, preventDefault() { prevented = true; } });
+	f.tool.onPointerDown(hit, f.overlays.get(1), f.ctx);
+	assert.equal(prevented, true, "annotation gestures still suppress browser selection");
+	f.tool.onPointerUp(hit, f.overlays.get(1), f.ctx);
+	assert.equal(f.tool.copy(f.ctx)[0].ann.id, "selected");
+});
+
+test("native PDF text copy/cut takes precedence over annotation selection only in its own view", () => {
+	const f = fixture();
+	addAnnotation(f.doc, 1, shape("selected"));
+	f.click(1, "selected");
+	const { view, dispatch } = viewFixture(f), data = new Clipboard();
+	const layer = { inView: true };
+	const selection = { isCollapsed: false, anchorNode: { nodeType: 3, parentElement: {
+		closest: selector => selector === ".pdf-annotator-textlayer" ? layer : null,
+	} } };
+	view.contentEl.ownerDocument.getSelection = () => selection;
+	for (const type of ["copy", "cut"]) assert.equal(dispatch(type, data).defaultPrevented, false);
+	assert.equal(data.values.size, 0);
+	assert.equal(f.doc.pages.get(1).items.length, 1);
+	layer.inView = false;
+	assert.equal(dispatch("copy", data).defaultPrevented, true);
+	layer.inView = true;
+	selection.isCollapsed = true;
+	assert.equal(dispatch("copy", data).defaultPrevented, true);
 });
 
 test("view hit testing resolves blank and not-yet-rendered PDF overlays from coordinates, not captured targets", () => {
