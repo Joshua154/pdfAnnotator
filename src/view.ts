@@ -210,7 +210,8 @@ export class PDFAnnotatorView extends FileView {
 		this.noteFile = await this.store.getOrCreateNote(
 			file,
 			this.plugin.settings.annotationsFolder,
-			this.plugin.settings.annotationsRelativeToPdf
+			this.plugin.settings.annotationsRelativeToPdf,
+			this.plugin.settings.annotationFolderRules
 		);
 		const loaded = await this.store.load(this.noteFile, file);
 		// Mutate in place so toolCtx.doc stays valid

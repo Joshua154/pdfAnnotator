@@ -122,6 +122,19 @@ An empty custom folder saves directly in the selected location. Set **Pasted ima
 
 For example, choose a PDF-relative location, folder `Images/{filename}`, and filename `{filename}-{timestamp}` to keep each PDF's images together.
 
+### Annotation folder rules
+
+Use **Annotation folder rules → Add rule** to route PDFs by their source directory. For the following setup, leave **Annotations relative to PDF** disabled:
+
+| Source folder | Destination folder | Example result |
+| --- | --- | --- |
+| `PDFs/VL` | `Mitschriften` | `PDFs/VL/1_Intro.pdf` → `Mitschriften/1_Intro.annotations.md` |
+| `PDFs/Ue` | `Übung` | `PDFs/Ue/2_1_FP_Origins.pdf` → `Übung/2_1_FP_Origins.annotations.md` |
+
+Source folders are literal, case-sensitive paths from the vault root, matching that directory and its subdirectories. `PDFs/VL` does not match `PDFs/VL2`. The first matching rule wins; use **Move up** to put specific rules before broader ones. A blank source is ignored; `/` matches the entire vault. With no matching rule, **Annotations folder** remains the fallback. Remove all rules to restore the default behavior.
+
+Destinations support the placeholders below, including `Notes/{sourceDir}`, and use the same **Annotations relative to PDF** setting as the fallback folder. An empty destination saves directly in the selected base folder. Rules apply both when creating and locating notes on opening a PDF; existing notes are not moved.
+
 ### Template placeholders
 
 These placeholders work in annotation folders, pasted-image folders, and pasted-image filenames:
@@ -130,6 +143,8 @@ These placeholders work in annotation folders, pasted-image folders, and pasted-
 | --- | --- | --- |
 | `{filename}` | PDF filename without its extension | `Lecture` |
 | `{folder}` | Name of the PDF's immediate parent folder; empty at the vault root | `Math` |
+| `{sourceDir}` | Alias for `{folder}`: immediate parent directory name | `Math` |
+| `{sourcePath}` | Full vault-relative PDF path, including filename and extension | `Courses/Math/Lecture.pdf` |
 | `{date}` | Local date | `2026-10-16` |
 | `{time}` | Local time with filename-safe separators | `14-05-09` |
 | `{timestamp}` | Local date and time | `20261016140509` |
@@ -138,6 +153,8 @@ These placeholders work in annotation folders, pasted-image folders, and pasted-
 | `{day}` | Two-digit day | `16` |
 
 Annotation templates are evaluated when opening a PDF, and image templates when pasting. A date placeholder in an annotation folder therefore selects a different location on another day. Filenames cannot contain directory separators; configure those in the folder setting.
+
+`{sourcePath}` expands literally: `Notes/{sourcePath}` creates a folder such as `Notes/Courses/Math/Lecture.pdf`, with the annotation note inside it. Use it in folder templates, since a nested source path is not a valid pasted-image filename.
 
 ## Storage and privacy
 
