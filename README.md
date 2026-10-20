@@ -146,7 +146,11 @@ Use **Annotation folder rules → Add rule** to route PDFs by their source direc
 
 Source folders are literal, case-sensitive paths from the vault root, matching that directory and its subdirectories. `PDFs/VL` does not match `PDFs/VL2`. The first matching rule wins; use **Move up** to put specific rules before broader ones. A blank source is ignored; `/` matches the entire vault. With no matching rule, **Annotations folder** remains the fallback. Remove all rules to restore the default behavior.
 
+Prefix a source with `**/` to match that folder at any depth. For example, with **Annotations relative to PDF** enabled, use `**/PDFs/VL` → `../../Mitschriften` and `**/PDFs/Ue` → `../../Übung` to route `Semester/Course/PDFs/VL/Lecture.pdf` to `Semester/Course/Mitschriften/Lecture.annotations.md` and exercise PDFs to the course's `Übung` folder. The prefix also matches `PDFs/VL` at the vault root. Only a leading `**/` has wildcard meaning; the remaining folder names are literal. Relative destinations still start from each PDF's own folder, so adjust `../` for PDFs in deeper subfolders.
+
 Destinations support the placeholders below, including `Notes/{sourceDir}`, and use the same **Annotations relative to PDF** setting as the fallback folder. An empty destination saves directly in the selected base folder. Rules apply both when creating and locating notes on opening a PDF; existing notes are not moved.
+
+External edits to the installed plugin's `data.json` reload settings automatically. Close and reopen an existing annotator tab to apply a changed note location; running **Annotate PDF** for an already open PDF reveals that tab and keeps its current note.
 
 ### Template placeholders
 

@@ -146,6 +146,95 @@ test("annotation rules route source directories, respect order, and fall back on
 	]), /inside the vault/);
 });
 
+test("leading **/ source rules match complete directory sequences at any depth", () => {
+	const store = new AnnotationStore({});
+	const rules = [
+		{ sourceFolder: "**/PDFs/VL", annotationsFolder: "Mitschriften" },
+		{ sourceFolder: "**/PDFs/Ue", annotationsFolder: "Übung" },
+	];
+	for (const [source, destination] of [
+		["PDFs/VL/Intro.pdf", "Mitschriften"],
+		["Course/PDFs/VL/Intro.pdf", "Mitschriften"],
+		["26-27_WiSe/Correct-by-Construction/PDFs/VL/Intro.pdf", "Mitschriften"],
+		["26-27_WiSe/Übersetzen/PDFs/Ue/Intro.pdf", "Übung"],
+		["PDFs/Ue/Intro.pdf", "Übung"],
+		["Course/PDFs/VL/Nested/Intro.pdf", "Mitschriften"],
+		["Course/PDFs/Ue/Nested/More/Intro.pdf", "Übung"],
+		["Course/PDFs/VL2/Intro.pdf", "Fallback"],
+		["Course/OtherPDFs/VL/Intro.pdf", "Fallback"],
+		["Course/PDFs/VL-extra/Intro.pdf", "Fallback"],
+		["Course/PDFs/vl/Intro.pdf", "Fallback"],
+		["Course/pdfs/VL/Intro.pdf", "Fallback"],
+		["Course/VL/PDFs/Intro.pdf", "Fallback"],
+		["Course/PDFs/Other/VL/Intro.pdf", "Fallback"],
+		["Course/VL/Intro.pdf", "Fallback"],
+		["Course/PDFs/Intro.pdf", "Fallback"],
+		["Intro.pdf", "Fallback"],
+	]) {
+		assert.equal(store.notePathForPdf(new TFile(source), "Fallback", false, rules),
+			`${destination}/Intro.annotations.md`, source);
+	}
+});
+
+test("leading **/ rules preserve literal source anchoring and first-match order", () => {
+	const store = new AnnotationStore({});
+	const literal = { sourceFolder: "PDFs/VL", annotationsFolder: "Literal" };
+	const specific = { sourceFolder: "**/PDFs/VL", annotationsFolder: "Specific" };
+	const broad = { sourceFolder: "**/PDFs", annotationsFolder: "Broad" };
+	const nested = new TFile("Course/PDFs/VL/Intro.pdf");
+	assert.equal(store.notePathForPdf(nested, "Fallback", false, [literal]), "Fallback/Intro.annotations.md");
+	assert.equal(store.notePathForPdf(new TFile("PDFs/VL/Intro.pdf"), "Fallback", false,
+		[literal, specific]), "Literal/Intro.annotations.md");
+	assert.equal(store.notePathForPdf(nested, "Fallback", false, [literal, specific]),
+		"Specific/Intro.annotations.md");
+	assert.equal(store.notePathForPdf(nested, "Fallback", false, [broad, specific]),
+		"Broad/Intro.annotations.md");
+	assert.equal(store.notePathForPdf(nested, "Fallback", false, [specific, broad]),
+		"Specific/Intro.annotations.md");
+});
+
+test("leading **/ rules create and reuse course-local notes with PDF-relative destinations", async () => {
+	const entries = new Map();
+	let creations = 0;
+	const app = {
+		metadataCache: { fileToLinktext: file => file.path },
+		vault: {
+			getAbstractFileByPath: path => entries.get(path) ?? null,
+			async createFolder(path) {
+				const folder = new TFolder(path);
+				entries.set(path, folder);
+				return folder;
+			},
+			async create(path) {
+				creations++;
+				const file = new TFile(path);
+				entries.set(path, file);
+				return file;
+			},
+		},
+	};
+	const store = new AnnotationStore(app);
+	const rules = [
+		{ sourceFolder: "**/PDFs/VL", annotationsFolder: "../../Mitschriften" },
+		{ sourceFolder: "**/PDFs/Ue", annotationsFolder: "../../Übung" },
+	];
+	for (const [source, destination] of [
+		["26-27_WiSe/Correct-by-Construction/PDFs/VL/2_1_FP_Origins.pdf",
+			"26-27_WiSe/Correct-by-Construction/Mitschriften/2_1_FP_Origins.annotations.md"],
+		["26-27_WiSe/Übersetzen/PDFs/Ue/Blatt 1.pdf",
+			"26-27_WiSe/Übersetzen/Übung/Blatt 1.annotations.md"],
+		["26-27_WiSe/Übersetzen/PDFs/Other/Unmatched.pdf",
+			"26-27_WiSe/Übersetzen/Fallback/Unmatched.annotations.md"],
+	]) {
+		const pdf = new TFile(source);
+		assert.equal(store.notePathForPdf(pdf, "../../Fallback", true, rules), destination);
+		const note = await store.getOrCreateNote(pdf, "../../Fallback", true, rules);
+		assert.equal(note.path, destination);
+		assert.equal(await store.getOrCreateNote(pdf, "../../Fallback", true, rules), note);
+	}
+	assert.equal(creations, 3);
+});
+
 test("mapped note creation and lookup use the same expanded destination", async () => {
 	const entries = new Map();
 	let creations = 0;

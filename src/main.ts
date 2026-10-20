@@ -8,6 +8,7 @@ import { PDFAnnotatorView, VIEW_TYPE_PDF_ANNOTATOR } from "./view";
 
 export default class PdfAnnotatorPlugin extends Plugin {
 	settings: PdfAnnotatorSettings = DEFAULT_SETTINGS;
+	private settingsTab?: PdfAnnotatorSettingTab;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -17,7 +18,8 @@ export default class PdfAnnotatorPlugin extends Plugin {
 			(leaf: WorkspaceLeaf) => new PDFAnnotatorView(leaf, this)
 		);
 
-		this.addSettingTab(new PdfAnnotatorSettingTab(this.app, this));
+		this.settingsTab = new PdfAnnotatorSettingTab(this.app, this);
+		this.addSettingTab(this.settingsTab);
 
 		// Command: open the currently-active PDF in the annotator
 		this.addCommand({
@@ -93,6 +95,11 @@ export default class PdfAnnotatorPlugin extends Plugin {
 			DEFAULT_SETTINGS,
 			await this.loadData()
 		);
+	}
+
+	async onExternalSettingsChange(): Promise<void> {
+		await this.loadSettings();
+		if (this.settingsTab?.containerEl?.isShown()) this.settingsTab.display();
 	}
 
 	async saveSettings(): Promise<void> {
