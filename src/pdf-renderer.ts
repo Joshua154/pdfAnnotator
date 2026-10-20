@@ -76,7 +76,7 @@ export async function renderPage(
 ): Promise<RenderedPage> {
 	const page: PDFPageProxy = await pdfDoc.getPage(pageNum);
 	const baseViewport = page.getViewport({ scale: 1 });
-	const dpr = window.devicePixelRatio || 1;
+	const dpr = canvas.ownerDocument.defaultView?.devicePixelRatio || 1;
 	const viewport = page.getViewport({ scale: zoom });
 
 	canvas.width = Math.floor(viewport.width * dpr);
@@ -86,38 +86,49 @@ export async function renderPage(
 
 	const ctx = canvas.getContext("2d");
 	if (!ctx) throw new Error("Could not get canvas context");
-	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
 	await page.render({
 		canvasContext: ctx,
 		viewport,
+		transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
 	} as Parameters<PDFPageProxy["render"]>[0]).promise;
 
 	// --- text layer ---
 	textLayerEl.empty();
 	textLayerEl.style.width = `${Math.floor(viewport.width)}px`;
 	textLayerEl.style.height = `${Math.floor(viewport.height)}px`;
-	// pdf.js text layer CSS expects this variable for font scaling
-	textLayerEl.style.setProperty("--scale-factor", String(zoom));
+	// PDF.js 3/4 uses --scale-factor; 5 uses --total-scale-factor and
+	// requires rounding units too. Derive the effective scale from the viewport
+	// so PDFs with /UserUnit also line up with the canvas in either API.
+	const [pageX, pageY, pageRight, pageTop] = page.view;
+	const pageWidth = pageRight - pageX, pageHeight = pageTop - pageY;
+	const scale = viewport.width / (viewport.rotation % 180 ? pageHeight : pageWidth);
+	const textViewport = viewport.clone();
+	// Some PDF.js 4 releases include UserUnit in rawDims even though text-item
+	// coordinates are still unscaled. Normalize only the text viewport.
+	Object.defineProperty(textViewport, "rawDims", { value: { pageWidth, pageHeight, pageX, pageY } });
+	textLayerEl.style.setProperty("--scale-factor", String(scale));
+	textLayerEl.style.setProperty("--total-scale-factor", String(scale));
+	textLayerEl.style.setProperty("--scale-round-x", "1px");
+	textLayerEl.style.setProperty("--scale-round-y", "1px");
 
 	let textDivs: HTMLElement[] = [];
 	try {
 		const pdfjs = await getPdfJs();
 		const textContent = await page.getTextContent();
 		if (pdfjs.renderTextLayer) {
-			// pdf.js v3-style API (what Obsidian currently bundles)
+			// Older Obsidian releases expose the PDF.js 3 API.
 			await pdfjs.renderTextLayer({
 				textContentSource: textContent,
 				container: textLayerEl,
-				viewport,
+				viewport: textViewport,
 				textDivs,
 			}).promise;
 		} else if (pdfjs.TextLayer) {
-			// pdf.js v4-style API
+			// PDF.js 4/5 API.
 			const tl = new pdfjs.TextLayer({
 				textContentSource: textContent,
 				container: textLayerEl,
-				viewport,
+				viewport: textViewport,
 			});
 			await tl.render();
 			textDivs = tl.textDivs;

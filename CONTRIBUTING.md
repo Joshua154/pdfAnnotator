@@ -12,6 +12,14 @@ npm run check
 
 Add focused behavior tests for changes to navigation, storage paths, serialization, or lifecycle cleanup. Automated tests run outside Obsidian with small DOM/vault fixtures; they do not replace testing the plugin inside Obsidian.
 
+Text-layer geometry also has a real Chromium regression test:
+
+```sh
+CHROMIUM_PATH=/path/to/chromium npm run test:browser
+```
+
+It checks rendered glyph alignment, native selection, search markers, saved highlights, and undo at several zooms, all four page rotations, standard/high pixel densities, and PDF page units. It uses the installed `pdfjs-dist` by default. Set `PDFJS_DIR` to a directory containing matching `pdf.mjs` / `pdf.worker.mjs` (or their `.min.mjs` variants) to check another runtime, including Obsidian's bundled PDF.js. The browser runs with a temporary profile and generated fixture PDFs.
+
 ## Manual checks
 
 Use disposable PDFs and notes in a test vault:

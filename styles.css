@@ -160,12 +160,18 @@
 	display: block;
 }
 
-/* text layer (copied subset of pdf.js textLayer styling) */
+/* PDF.js text geometry: keep metrics independent of the surrounding theme. */
 .pdf-annotator-textlayer {
 	position: absolute;
+	text-align: initial;
+	direction: ltr;
 	inset: 0;
 	overflow: hidden;
 	line-height: 1;
+	letter-spacing: normal;
+	word-spacing: normal;
+	text-transform: none;
+	-webkit-text-size-adjust: none;
 	text-size-adjust: none;
 	forced-color-adjust: none;
 	transform-origin: 0 0;
@@ -173,7 +179,8 @@
 	z-index: 1;
 }
 
-.pdf-annotator-textlayer span {
+.pdf-annotator-textlayer span,
+.pdf-annotator-textlayer br {
 	color: transparent;
 	position: absolute;
 	white-space: pre;
@@ -181,10 +188,36 @@
 	transform-origin: 0% 0%;
 }
 
+.pdf-annotator-textlayer span.markedContent {
+	top: 0;
+	height: 0;
+}
+
+.pdf-annotator-textlayer span[role="img"] {
+	user-select: none;
+	cursor: default;
+}
+
+/* PDF.js lays out text in unrotated page space; zoom uses the separate scale property. */
+.pdf-annotator-textlayer[data-main-rotation="90"] {
+	transform: rotate(90deg) translateY(-100%);
+}
+
+.pdf-annotator-textlayer[data-main-rotation="180"] {
+	transform: rotate(180deg) translate(-100%, -100%);
+}
+
+.pdf-annotator-textlayer[data-main-rotation="270"] {
+	transform: rotate(270deg) translateX(-100%);
+}
+
 .pdf-annotator-textlayer ::selection {
 	background: rgba(0, 120, 215, 0.35);
 }
 
+.pdf-annotator-textlayer br::selection {
+	background: transparent;
+}
 /* Select and text-highlight both allow native PDF text selection. */
 .pdf-annotator-page.mode-draw .pdf-annotator-textlayer {
 	pointer-events: none;

@@ -479,7 +479,8 @@ export class PDFAnnotatorView extends FileView {
 		// Stretch the existing bitmap during a pinch; render at full resolution on release.
 		p.canvas.style.width = `${w}px`;
 		p.canvas.style.height = `${h}px`;
-		p.textLayer.style.transform = `scale(${this.zoom / (p.renderedZoom ?? this.zoom)})`;
+		// Keep zoom separate from PDF.js's CSS page rotation.
+		p.textLayer.style.scale = String(this.zoom / (p.renderedZoom ?? this.zoom));
 		p.overlay?.setDisplaySize(w, h);
 	}
 
