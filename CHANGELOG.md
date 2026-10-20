@@ -2,17 +2,17 @@
 
 ## Unreleased
 
+### 0.4.1
+
+- Support a leading `**/` in annotation folder rules to match repeated folder layouts across courses or semesters.
+- Reload plugin settings when `data.json` is edited externally.
+
 ## 0.4.0
 
 - Fix PDF text selection, search, and highlight alignment with Obsidian's newer PDF.js runtime, including zoomed/rotated pages and PDFs with nonstandard page units.
 - Enable native PDF text selection and copying with the Select tool while retaining annotation move and resize controls.
 - Add search for selectable PDF text and written text annotations, including blank pages, with Ctrl/Cmd+F, scope filters, match navigation, and temporary highlights.
 - Add `{sourceDir}` and `{sourcePath}` storage placeholders and ordered annotation folder rules that route PDFs by source directory, with the existing folder setting as a fallback.
-
-### HotFix
-
-- Support a leading `**/` in annotation folder rules to match repeated folder layouts across courses or semesters.
-- Reload plugin settings when `data.json` is edited externally.
 
 ## 0.3.0
 
