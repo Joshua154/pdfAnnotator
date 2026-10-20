@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add `{sourceDir}` and `{sourcePath}` storage placeholders and ordered annotation folder rules that route PDFs by source directory, with the existing folder setting as a fallback.
+
 ## 0.3.0
 
 - Add annotated PDF export from the toolbar and command palette, preserving source PDF content and including inserted blank pages. Export creates a separate file beside the source with collision-free filenames, progress reporting, and cancellation on view close.

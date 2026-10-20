@@ -1,5 +1,5 @@
 import { App, TFile, TFolder, normalizePath } from "obsidian";
-import type { PdfAnnotatorSettings } from "./settings";
+import type { AnnotationFolderRule, PdfAnnotatorSettings } from "./settings";
 
 /** Expand storage templates using the PDF and local date/time. */
 export function expandStorageTemplate(template: string, pdf: TFile | null, now = new Date()): string {
@@ -9,6 +9,8 @@ export function expandStorageTemplate(template: string, pdf: TFile | null, now =
 	const values: Record<string, string> = {
 		filename: pdf?.basename ?? "PDF",
 		folder: pdf?.parent?.path.split("/").filter(Boolean).pop() ?? "",
+		sourceDir: pdf?.parent?.path.split("/").filter(Boolean).pop() ?? "",
+		sourcePath: pdf?.path ?? "",
 		date,
 		time,
 		year: String(now.getFullYear()),
@@ -16,7 +18,20 @@ export function expandStorageTemplate(template: string, pdf: TFile | null, now =
 		day: pad(now.getDate()),
 		timestamp: date.replace(/-/g, "") + time.replace(/-/g, ""),
 	};
-	return template.replace(/\{([a-z]+)\}/g, (match, key: string) => values[key] ?? match);
+	return template.replace(/\{([a-zA-Z]+)\}/g, (match, key: string) =>
+		Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match);
+}
+
+/** First matching source directory wins, including PDFs in its subdirectories. */
+export function annotationFolderTemplate(pdf: TFile, fallback: string, rules: AnnotationFolderRule[] = []): string {
+	const parent = (pdf.parent?.path ?? "").replace(/^\/|\/$/g, "");
+	for (const rule of rules) {
+		// Blank rows are inactive while the user edits settings. "/" matches the vault root.
+		if (!rule.sourceFolder.trim()) continue;
+		const source = resolveStorageFolder(null, rule.sourceFolder);
+		if (!source || parent === source || parent.startsWith(`${source}/`)) return rule.annotationsFolder;
+	}
+	return fallback;
 }
 
 export function resolveStorageFolder(pdf: TFile | null, template: string, relativeToPdf = false, now = new Date()): string {

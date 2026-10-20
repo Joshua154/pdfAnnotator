@@ -7,7 +7,8 @@ import {
 	PageAnnotations,
 } from "./model";
 
-import { ensureStorageFolder, resolveStorageFolder } from "../storage-paths";
+import { annotationFolderTemplate, ensureStorageFolder, resolveStorageFolder } from "../storage-paths";
+import type { AnnotationFolderRule } from "../settings";
 
 const CODE_FENCE_LANG = "pdf-annotations";
 const FORMAT_VERSION = 2;
@@ -38,13 +39,13 @@ export class AnnotationStore {
 	// ------------------------------------------------------------------
 
 	/** Markdown note path for a given PDF, inside the annotations folder. */
-	notePathForPdf(pdfFile: TFile, folder: string, relativeToPdf = false): string {
-		const resolved = resolveStorageFolder(pdfFile, folder, relativeToPdf);
+	notePathForPdf(pdfFile: TFile, folder: string, relativeToPdf = false, rules: AnnotationFolderRule[] = []): string {
+		const resolved = resolveStorageFolder(pdfFile, annotationFolderTemplate(pdfFile, folder, rules), relativeToPdf);
 		return normalizePath([resolved, `${pdfFile.basename}.annotations.md`].filter(Boolean).join("/"));
 	}
 
-	async getOrCreateNote(pdfFile: TFile, folder: string, relativeToPdf = false): Promise<TFile> {
-		const path = this.notePathForPdf(pdfFile, folder, relativeToPdf);
+	async getOrCreateNote(pdfFile: TFile, folder: string, relativeToPdf = false, rules: AnnotationFolderRule[] = []): Promise<TFile> {
+		const path = this.notePathForPdf(pdfFile, folder, relativeToPdf, rules);
 		const existing = this.app.vault.getAbstractFileByPath(path);
 		if (existing instanceof TFile) return existing;
 

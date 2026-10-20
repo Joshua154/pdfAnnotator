@@ -102,6 +102,80 @@ test("templates expand PDF context and local dates consistently", () => {
 	assert.equal(expandStorageTemplate("{folder}{filename}", new TFile("Root.pdf"), now), "Root");
 });
 
+test("source placeholders include the immediate directory and full vault-relative PDF path", () => {
+	const template = "{sourceDir}|{sourcePath}|{folder}|{unknown}|{SourcePath}|{constructor}";
+	assert.equal(expandStorageTemplate(template, new TFile("PDFs/Übung/Intro.pdf")),
+		"Übung|PDFs/Übung/Intro.pdf|Übung|{unknown}|{SourcePath}|{constructor}");
+	assert.equal(expandStorageTemplate("{sourceDir}|{sourcePath}", new TFile("Intro.pdf")), "|Intro.pdf");
+	assert.equal(expandStorageTemplate("{sourceDir}|{sourcePath}", null), "|");
+	assert.equal(new AnnotationStore({}).notePathForPdf(new TFile("PDFs/VL/Intro.pdf"), "Notes/{sourcePath}"),
+		"Notes/PDFs/VL/Intro.pdf/Intro.annotations.md");
+});
+
+test("annotation rules route source directories, respect order, and fall back on nonmatches", () => {
+	const store = new AnnotationStore({});
+	const rules = [
+		{ sourceFolder: "", annotationsFolder: "Ignored" },
+		{ sourceFolder: "PDFs/VL/", annotationsFolder: "Mitschriften" },
+		{ sourceFolder: "PDFs\\Ue", annotationsFolder: "Übung" },
+		{ sourceFolder: "PDFs", annotationsFolder: "Notes/{sourceDir}" },
+	];
+	for (const [source, expected] of [
+		["PDFs/VL/1_Intro.pdf", "Mitschriften/1_Intro.annotations.md"],
+		["PDFs/Ue/2_1_FP_Origins.pdf", "Übung/2_1_FP_Origins.annotations.md"],
+		["PDFs/VL/Nested/Intro.pdf", "Mitschriften/Intro.annotations.md"],
+		["PDFs/VL2/Intro.pdf", "Notes/VL2/Intro.annotations.md"],
+		["PDFs/vl/Intro.pdf", "Notes/vl/Intro.annotations.md"],
+		["Other/Intro.pdf", "Fallback/Intro.annotations.md"],
+		["Intro.pdf", "Fallback/Intro.annotations.md"],
+	]) {
+		assert.equal(store.notePathForPdf(new TFile(source), "Fallback", false, rules), expected);
+	}
+	const pdf = new TFile("PDFs/VL/Intro.pdf");
+	assert.equal(store.notePathForPdf(pdf, "Fallback", true, [
+		{ sourceFolder: "PDFs/VL", annotationsFolder: "../../Notes/{sourceDir}" },
+	]), "Notes/VL/Intro.annotations.md");
+	assert.equal(store.notePathForPdf(pdf, "Fallback", false, [
+		{ sourceFolder: "/", annotationsFolder: "" },
+	]), "Intro.annotations.md");
+	assert.throws(() => store.notePathForPdf(pdf, "", false, [
+		{ sourceFolder: "PDFs", annotationsFolder: "../Outside" },
+	]), /inside the vault/);
+	assert.throws(() => store.notePathForPdf(pdf, "", false, [
+		{ sourceFolder: "../Outside", annotationsFolder: "Notes" },
+	]), /inside the vault/);
+});
+
+test("mapped note creation and lookup use the same expanded destination", async () => {
+	const entries = new Map();
+	let creations = 0;
+	const app = {
+		metadataCache: { fileToLinktext: file => file.path },
+		vault: {
+			getAbstractFileByPath: path => entries.get(path) ?? null,
+			async createFolder(path) {
+				const folder = new TFolder(path);
+				entries.set(path, folder);
+				return folder;
+			},
+			async create(path) {
+				creations++;
+				const file = new TFile(path);
+				entries.set(path, file);
+				return file;
+			},
+		},
+	};
+	const store = new AnnotationStore(app);
+	const pdf = new TFile("PDFs/Ue/Intro.pdf");
+	const rules = [{ sourceFolder: "PDFs/Ue", annotationsFolder: "Übung/{sourceDir}" }];
+	const note = await store.getOrCreateNote(pdf, "Fallback", false, rules);
+	assert.equal(note.path, "Übung/Ue/Intro.annotations.md");
+	assert.ok(entries.get("Übung/Ue") instanceof TFolder);
+	assert.equal(await store.getOrCreateNote(pdf, "Fallback", false, rules), note);
+	assert.equal(creations, 1);
+});
+
 test("pasted images use configured folders, expand filenames, and avoid overwrites", async () => {
 	const entries = new Map();
 	const app = { vault: {
