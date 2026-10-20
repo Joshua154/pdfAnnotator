@@ -28,8 +28,15 @@ export function annotationFolderTemplate(pdf: TFile, fallback: string, rules: An
 	for (const rule of rules) {
 		// Blank rows are inactive while the user edits settings. "/" matches the vault root.
 		if (!rule.sourceFolder.trim()) continue;
-		const source = resolveStorageFolder(null, rule.sourceFolder);
-		if (!source || parent === source || parent.startsWith(`${source}/`)) return rule.annotationsFolder;
+		const pattern = rule.sourceFolder.trim().replace(/\\/g, "/");
+		const anyDepth = pattern.startsWith("**/");
+		const source = resolveStorageFolder(null, anyDepth ? pattern.slice(3) : pattern);
+		// Include separators so folder names and path components must match in full.
+		const sourcePath = `/${source}/`;
+		const parentPath = `/${parent}/`;
+		if (!source || (anyDepth ? parentPath.includes(sourcePath) : parentPath.startsWith(sourcePath))) {
+			return rule.annotationsFolder;
+		}
 	}
 	return fallback;
 }

@@ -9,6 +9,11 @@
 - Add search for selectable PDF text and written text annotations, including blank pages, with Ctrl/Cmd+F, scope filters, match navigation, and temporary highlights.
 - Add `{sourceDir}` and `{sourcePath}` storage placeholders and ordered annotation folder rules that route PDFs by source directory, with the existing folder setting as a fallback.
 
+### HotFix
+
+- Support a leading `**/` in annotation folder rules to match repeated folder layouts across courses or semesters.
+- Reload plugin settings when `data.json` is edited externally.
+
 ## 0.3.0
 
 - Add annotated PDF export from the toolbar and command palette, preserving source PDF content and including inserted blank pages. Export creates a separate file beside the source with collision-free filenames, progress reporting, and cancellation on view close.

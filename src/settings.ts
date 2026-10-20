@@ -3,7 +3,7 @@ import type PdfAnnotatorPlugin from "./main";
 import { ToolId } from "./tools/tool";
 
 export interface AnnotationFolderRule {
-	/** Vault-relative source directory, including its descendants. */
+	/** Source directory and descendants; a leading globstar matches at any depth. */
 	sourceFolder: string;
 	/** Destination template using the global annotation base location. */
 	annotationsFolder: string;
@@ -94,7 +94,7 @@ export class PdfAnnotatorSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Annotation folder rules")
-			.setDesc("Match a vault-relative source folder and its subfolders (case-sensitive). First match wins; otherwise use Annotations folder. Blank source folders are ignored; / matches the whole vault. Destinations support placeholders and follow Annotations relative to PDF. Existing notes are not moved.")
+			.setDesc("Match a vault-relative source folder and its subfolders (case-sensitive). Prefix with **/ to match at any depth, for example **/PDFs/VL across courses. First match wins; otherwise use Annotations folder. Blank source folders are ignored; / matches the whole vault. Destinations support placeholders and follow Annotations relative to PDF. Close and reopen an existing annotator tab to apply new paths; existing notes are not moved.")
 			.addButton(button => button.setButtonText("Add rule").onClick(async () => {
 				this.plugin.settings.annotationFolderRules = [
 					...this.plugin.settings.annotationFolderRules,
