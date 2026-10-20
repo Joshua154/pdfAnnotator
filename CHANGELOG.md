@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Enable native PDF text selection and copying with the Select tool while retaining annotation move and resize controls.
+- Add search for selectable PDF text and written text annotations, including blank pages, with Ctrl/Cmd+F, scope filters, match navigation, and temporary highlights.
 - Add `{sourceDir}` and `{sourcePath}` storage placeholders and ordered annotation folder rules that route PDFs by source directory, with the existing folder setting as a fallback.
 
 ## 0.3.0

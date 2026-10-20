@@ -24,7 +24,7 @@ interface PdfJsModule {
 		textContentSource: unknown;
 		container: HTMLElement;
 		viewport: unknown;
-	}) => { render(): Promise<void> };
+	}) => { render(): Promise<void>; textDivs: HTMLElement[] };
 }
 
 let pdfjsPromise: Promise<PdfJsModule> | null = null;
@@ -46,6 +46,7 @@ export async function loadPdfDocument(
 }
 
 export interface RenderedPage {
+	textDivs: HTMLElement[];
 	/** PDF page width in user-space units. */
 	pdfWidth: number;
 	/** PDF page height in user-space units. */
@@ -99,6 +100,7 @@ export async function renderPage(
 	// pdf.js text layer CSS expects this variable for font scaling
 	textLayerEl.style.setProperty("--scale-factor", String(zoom));
 
+	let textDivs: HTMLElement[] = [];
 	try {
 		const pdfjs = await getPdfJs();
 		const textContent = await page.getTextContent();
@@ -108,6 +110,7 @@ export async function renderPage(
 				textContentSource: textContent,
 				container: textLayerEl,
 				viewport,
+				textDivs,
 			}).promise;
 		} else if (pdfjs.TextLayer) {
 			// pdf.js v4-style API
@@ -117,12 +120,14 @@ export async function renderPage(
 				viewport,
 			});
 			await tl.render();
+			textDivs = tl.textDivs;
 		}
 	} catch (e) {
 		console.warn("PDF Annotator: text layer render failed", e);
 	}
 
 	return {
+		textDivs,
 		pdfWidth: baseViewport.width,
 		pdfHeight: baseViewport.height,
 	};
