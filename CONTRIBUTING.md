@@ -12,6 +12,14 @@ npm run check
 
 Add focused behavior tests for changes to navigation, storage paths, serialization, or lifecycle cleanup. Automated tests run outside Obsidian with small DOM/vault fixtures; they do not replace testing the plugin inside Obsidian.
 
+Text-layer geometry also has a real Chromium regression test:
+
+```sh
+CHROMIUM_PATH=/path/to/chromium npm run test:browser
+```
+
+It checks rendered glyph alignment, native selection, search markers, saved highlights, and undo at several zooms, all four page rotations, standard/high pixel densities, and PDF page units. It uses the installed `pdfjs-dist` by default. Set `PDFJS_DIR` to a directory containing matching `pdf.mjs` / `pdf.worker.mjs` (or their `.min.mjs` variants) to check another runtime, including Obsidian's bundled PDF.js. The browser runs with a temporary profile and generated fixture PDFs.
+
 ## Manual checks
 
 Use disposable PDFs and notes in a test vault:
@@ -25,6 +33,8 @@ Use disposable PDFs and notes in a test vault:
 - Export through the toolbar and command palette with every annotation type, Unicode text, images, and empty/annotated blank pages. Open the exported copy in another PDF reader and verify stacking, transparency, page order, crop/rotation alignment, and searchable source text. Repeat export to verify existing files are preserved. Test missing images/renderers, encrypted PDFs, closing/switching files during export, and exporting from mobile and pop-out windows.
 - Try Left/Right snapping and held Up/Down scrolling at the first and last pages and different zoom levels.
 - Test text editing and toolbar inputs; navigation must not steal editing keys.
+- With Select active, drag/double-click PDF text and copy it, including after selecting an annotation. Verify annotation dragging/resizing, empty-space deselection, paste destinations, blank-page swiping, and the separate text-highlight tool still work.
+- Search PDF text and notes with the toolbar and Ctrl/Cmd+F. Check repeated and absent matches, phrases across text runs/lines, scope filters, Enter/Shift+Enter, Escape, blank-page notes, unrendered pages, and highlight alignment after zoom. Edit/delete notes and undo/redo with search open; close or switch PDFs while extraction is pending. Check search in a narrow pane and a pop-out window.
 - Test vault-relative and PDF-relative paths, empty folders, nested folders, templates, and repeated image filenames.
 - Switch files in the same pane and paste once; exactly one image should appear.
 - Close a text editor or text-highlighting view, disable/re-enable the plugin, and verify there are no orphaned listeners, duplicate pastes, or unsaved edits.

@@ -2,11 +2,19 @@ import { App, PluginSettingTab, Setting } from "obsidian";
 import type PdfAnnotatorPlugin from "./main";
 import { ToolId } from "./tools/tool";
 
+export interface AnnotationFolderRule {
+	/** Vault-relative source directory, including its descendants. */
+	sourceFolder: string;
+	/** Destination template using the global annotation base location. */
+	annotationsFolder: string;
+}
+
 export interface PdfAnnotatorSettings {
 	/** Folder where annotation markdown files are stored. */
 	annotationsFolder: string;
 	/** Resolve the annotations folder relative to each PDF's containing folder. */
 	annotationsRelativeToPdf: boolean;
+	annotationFolderRules: AnnotationFolderRule[];
 	/** Base folder used when saving pasted images. */
 	pastedImageLocation: "obsidian" | "vault" | "pdf";
 	pastedImagesFolder: string;
@@ -31,6 +39,7 @@ export interface PdfAnnotatorSettings {
 export const DEFAULT_SETTINGS: PdfAnnotatorSettings = {
 	annotationsFolder: "PDF Annotations",
 	annotationsRelativeToPdf: false,
+	annotationFolderRules: [],
 	pastedImageLocation: "obsidian",
 	pastedImagesFolder: "PDF Images",
 	pastedImageName: "Pasted image {filename} {timestamp}",
@@ -54,7 +63,7 @@ export class PdfAnnotatorSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		const templateHelp = "Placeholders: {filename} = PDF name without extension, {folder} = PDF folder name, {date} = YYYY-MM-DD, {time} = HH-mm-ss, {timestamp} = YYYYMMDDHHmmss; also {year}, {month}, {day}. Dates and times are local.";
+		const templateHelp = "Placeholders: {filename} = PDF name without extension, {folder} or {sourceDir} = PDF folder name, {sourcePath} = vault-relative PDF path including extension, {date} = YYYY-MM-DD, {time} = HH-mm-ss, {timestamp} = YYYYMMDDHHmmss; also {year}, {month}, {day}. Dates and times are local.";
 
 		new Setting(containerEl)
 			.setName("Annotations folder")
@@ -82,6 +91,44 @@ export class PdfAnnotatorSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		new Setting(containerEl)
+			.setName("Annotation folder rules")
+			.setDesc("Match a vault-relative source folder and its subfolders (case-sensitive). First match wins; otherwise use Annotations folder. Blank source folders are ignored; / matches the whole vault. Destinations support placeholders and follow Annotations relative to PDF. Existing notes are not moved.")
+			.addButton(button => button.setButtonText("Add rule").onClick(async () => {
+				this.plugin.settings.annotationFolderRules = [
+					...this.plugin.settings.annotationFolderRules,
+					{ sourceFolder: "", annotationsFolder: "" },
+				];
+				await this.plugin.saveSettings();
+				this.display();
+			}));
+
+		this.plugin.settings.annotationFolderRules.forEach((rule, index) => {
+			new Setting(containerEl)
+				.setName(`Folder rule ${index + 1}`)
+				.addText(text => text.setPlaceholder("Source folder: PDFs/VL")
+					.setValue(rule.sourceFolder).onChange(async value => {
+						rule.sourceFolder = value.trim();
+						await this.plugin.saveSettings();
+					}))
+				.addText(text => text.setPlaceholder("Destination: Mitschriften")
+					.setValue(rule.annotationsFolder).onChange(async value => {
+						rule.annotationsFolder = value.trim();
+						await this.plugin.saveSettings();
+					}))
+				.addButton(button => button.setButtonText("Move up").setDisabled(index === 0).onClick(async () => {
+					const rules = this.plugin.settings.annotationFolderRules;
+					[rules[index - 1], rules[index]] = [rules[index], rules[index - 1]];
+					await this.plugin.saveSettings();
+					this.display();
+				}))
+				.addButton(button => button.setButtonText("Remove").onClick(async () => {
+					this.plugin.settings.annotationFolderRules.splice(index, 1);
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+		});
 
 		new Setting(containerEl)
 			.setName("Pasted image location")

@@ -11,6 +11,7 @@ Draw, highlight, and add text, shapes, and images to PDFs in Obsidian. Annotatio
 - Cut, copy, paste, and drag selections across PDF and blank pages.
 - Paste images from the clipboard and configure their storage folders and filenames.
 - Zoom, fit to width or height, page snapping, and smooth keyboard scrolling.
+- Search selectable PDF text and written text annotations, with match navigation and temporary highlights.
 - Insert blank pages for extra annotation space, with undo and redo.
 - Autosave to one Markdown note per PDF, with page links and annotation data.
 - Store notes and images in vault folders or relative to each PDF, using path templates.
@@ -36,6 +37,8 @@ Right-click a PDF in the file explorer and choose **Annotate PDF**, or open a PD
 Select a tool in the toolbar, then draw or click on a page. For text highlighting, choose **Highlight PDF text** and select text in the PDF. Text highlighting requires a PDF with selectable text; scanned documents need OCR from another tool first.
 
 Use **Select** to move or resize an annotation, or select it and press Delete. Click a text annotation twice with Select to edit it. Click outside a text box or press Ctrl/Cmd+Enter to save its text; Escape cancels editing.
+
+With **Select** active, drag across PDF text to select it and press Ctrl/Cmd+C to copy it. This uses the PDF's selectable text without creating a highlight annotation. Dragging an existing annotation still moves it; its resize handles remain available.
 
 On touch screens, swipe empty page space with **Select** to scroll. Use two fingers to pan or pinch to zoom while using any annotation tool. Adding a second finger cancels an unfinished stroke, erase, or annotation drag so navigation does not change annotations. Lift both fingers before starting a new annotation.
 
@@ -63,6 +66,14 @@ Sources, drawing paths, and positions are saved in the annotation note and resto
 
 Use **Insert blank page after current page** (the file-plus toolbar button) to add annotation space after the page you are viewing. The new page matches its size and supports drawing, text, shapes, and pasted images. You can insert several blank pages, including after another blank page, and undo or redo insertion. Blank pages, including empty ones, are saved in the annotation note and restored when you reopen the PDF in the annotator. They do not change the original PDF or its page links and do not appear in other PDF readers.
 
+### Search
+
+Click **Search PDF and notes** (the magnifying glass) or press **Ctrl/Cmd+F** in the annotator. Search covers the current PDF's selectable text, text boxes, quoted highlights, and LaTeX/TikZ source, including annotations on blank pages. Use the dropdown to search **PDF and notes**, **PDF only**, or **Notes only**.
+
+Matches are case-insensitive and treat the query as literal text, with flexible whitespace across line breaks. The search bar shows the match count, page, and a text preview. Use its arrow buttons or **Enter / Shift+Enter** in the search field to move forward/backward, wrapping at either end. The active result scrolls into view and receives a temporary highlight; note matches highlight the annotation's box. **Escape** in the search bar closes it and returns focus to the PDF.
+
+Search includes pages that have not been displayed yet and updates after annotation edits, deletion, and undo/redo. Opening search commits an active text edit. Search highlights are not saved or exported. Scanned pages, handwriting, pasted images, and the contents of linked drawings are not OCR-searched.
+
 ### Annotated PDF export
 
 Click **Export annotated PDF** (the file-down toolbar button), or run **PDF Annotator: Export annotated PDF** while an annotator pane is active. The plugin saves a separate file beside the source: `Lecture.pdf` becomes `Lecture.annotated.pdf`. Repeated exports receive numeric suffixes, preserving previous exports.
@@ -85,6 +96,8 @@ Click the PDF first to focus the viewer. Shortcuts are ignored while typing in a
 | E | Eraser |
 | T | Text box |
 | S | Highlight selected PDF text |
+| Ctrl/Cmd+F | Search current PDF and notes |
+| Enter / Shift+Enter | Next / previous match while typing in search |
 | R / O / L / A | Rectangle / ellipse / line / arrow |
 | Shift-click | Add/remove an annotation from the selection, across pages |
 | Ctrl/Cmd+A | Select all annotations (Select tool) |
@@ -122,6 +135,19 @@ An empty custom folder saves directly in the selected location. Set **Pasted ima
 
 For example, choose a PDF-relative location, folder `Images/{filename}`, and filename `{filename}-{timestamp}` to keep each PDF's images together.
 
+### Annotation folder rules
+
+Use **Annotation folder rules → Add rule** to route PDFs by their source directory. For the following setup, leave **Annotations relative to PDF** disabled:
+
+| Source folder | Destination folder | Example result |
+| --- | --- | --- |
+| `PDFs/VL` | `Mitschriften` | `PDFs/VL/1_Intro.pdf` → `Mitschriften/1_Intro.annotations.md` |
+| `PDFs/Ue` | `Übung` | `PDFs/Ue/2_1_FP_Origins.pdf` → `Übung/2_1_FP_Origins.annotations.md` |
+
+Source folders are literal, case-sensitive paths from the vault root, matching that directory and its subdirectories. `PDFs/VL` does not match `PDFs/VL2`. The first matching rule wins; use **Move up** to put specific rules before broader ones. A blank source is ignored; `/` matches the entire vault. With no matching rule, **Annotations folder** remains the fallback. Remove all rules to restore the default behavior.
+
+Destinations support the placeholders below, including `Notes/{sourceDir}`, and use the same **Annotations relative to PDF** setting as the fallback folder. An empty destination saves directly in the selected base folder. Rules apply both when creating and locating notes on opening a PDF; existing notes are not moved.
+
 ### Template placeholders
 
 These placeholders work in annotation folders, pasted-image folders, and pasted-image filenames:
@@ -130,6 +156,8 @@ These placeholders work in annotation folders, pasted-image folders, and pasted-
 | --- | --- | --- |
 | `{filename}` | PDF filename without its extension | `Lecture` |
 | `{folder}` | Name of the PDF's immediate parent folder; empty at the vault root | `Math` |
+| `{sourceDir}` | Alias for `{folder}`: immediate parent directory name | `Math` |
+| `{sourcePath}` | Full vault-relative PDF path, including filename and extension | `Courses/Math/Lecture.pdf` |
 | `{date}` | Local date | `2026-10-16` |
 | `{time}` | Local time with filename-safe separators | `14-05-09` |
 | `{timestamp}` | Local date and time | `20261016140509` |
@@ -138,6 +166,8 @@ These placeholders work in annotation folders, pasted-image folders, and pasted-
 | `{day}` | Two-digit day | `16` |
 
 Annotation templates are evaluated when opening a PDF, and image templates when pasting. A date placeholder in an annotation folder therefore selects a different location on another day. Filenames cannot contain directory separators; configure those in the folder setting.
+
+`{sourcePath}` expands literally: `Notes/{sourcePath}` creates a folder such as `Notes/Courses/Math/Lecture.pdf`, with the annotation note inside it. Use it in folder templates, since a nested source path is not a valid pasted-image filename.
 
 ## Storage and privacy
 
